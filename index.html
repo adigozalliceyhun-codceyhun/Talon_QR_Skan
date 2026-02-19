@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GHG Yemək - Skaner</title>
     
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    
     <style>
         * {
             margin: 0;
@@ -55,9 +53,9 @@
             width: 100%;
             border-radius: 15px;
             overflow: hidden;
+            min-height: 300px;
         }
 
-        /* ✅ TƏSDİQLƏNMƏ EKRANI */
         .success-overlay {
             position: fixed;
             top: 0;
@@ -179,29 +177,20 @@
             }
         }
 
-        .sync-status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            border-radius: 25px;
+        .error-message {
+            background: #f44336;
             color: white;
-            font-weight: bold;
-            z-index: 1000;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
             display: none;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
-
-        .sync-loading { background: #ff9800; }
-        .sync-success { background: #4caf50; }
-        .sync-error { background: #f44336; }
 
         @media (max-width: 600px) {
             .header h1 { font-size: 2em; }
             .success-content { padding: 30px 20px; }
             .success-title { font-size: 24px; }
-            .detail-row { font-size: 16px; }
-            .detail-label { min-width: 80px; }
         }
     </style>
 </head>
@@ -215,10 +204,10 @@
         <div class="scanner-section">
             <h2>📱 Kameranı talona yaxınlaşdırın</h2>
             <div id="reader"></div>
+            <div id="errorMsg" class="error-message"></div>
         </div>
     </div>
 
-    <!-- ✅ TƏSDİQLƏNMƏ EKRANI -->
     <div class="success-overlay" id="successOverlay">
         <div class="success-content">
             <div class="success-icon">✅</div>
@@ -259,19 +248,20 @@
         </div>
     </div>
 
-    <div class="sync-status" id="syncStatus"></div>
-
+    <!-- html5-qrcode kitabxanası -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
     <script>
-        // ✅ GOOGLE APPS SCRIPT URL
-        const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzLzI48FVKOIDG_8xfENiL_3LKY2eRMGZfLH8L4xgdTSs3Xx5QfuPIiT-2UvuxJNoVh/exec';
+        // ✅ DÜZGÜN URL - boşluqsuz
+        const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbwDJb6Al2bIm5GnYUmWgKyim5WvFgNmv4xRhHe2G3YtmpQjrqJwPDQivZCMC6xmYf4K/exec';
         
         let html5QrcodeScanner = null;
         let scanActive = true;
-        const SCAN_DELAY = 4000; // 4 saniyə
+        const SCAN_DELAY = 4000;
         
         const TICKET_MAP = {
             'b': 'breakfast',
-            'l': 'lunch',
+            'l': 'lunch', 
             'd': 'dinner',
             'dr': 'dry'
         };
@@ -283,28 +273,27 @@
             { id: 'dry', name: 'Quru Talon', emoji: '📦' }
         ];
 
-        function waitForLibrary() {
-            return new Promise((resolve) => {
-                if (typeof Html5QrcodeScanner !== 'undefined') {
-                    resolve();
-                } else {
-                    const checkInterval = setInterval(() => {
-                        if (typeof Html5QrcodeScanner !== 'undefined') {
-                            clearInterval(checkInterval);
-                            resolve();
-                        }
-                    }, 100);
-                }
-            });
-        }
-
-        window.addEventListener('load', async function() {
-            await waitForLibrary();
-            initScanner();
+        // Səhifə yüklənəndə başlat
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('Səhifə yükləndi, skaner başladılır...');
+            
+            // Kitabxananın yüklənməsini gözlə
+            if (typeof Html5QrcodeScanner === 'undefined') {
+                setTimeout(initScanner, 1000);
+            } else {
+                initScanner();
+            }
         });
 
         function initScanner() {
             try {
+                if (typeof Html5QrcodeScanner === 'undefined') {
+                    showError('Skaner kitabxanası yüklənmədi. Səhifəni yeniləyin.');
+                    return;
+                }
+
+                console.log('Skaner başladılır...');
+                
                 html5QrcodeScanner = new Html5QrcodeScanner(
                     "reader",
                     { 
@@ -316,31 +305,28 @@
                 );
 
                 html5QrcodeScanner.render(onScanSuccess, onScanError);
+                console.log('Skaner hazır');
+                
             } catch (e) {
                 console.error('Skaner xətası:', e);
+                showError('Skaner başladıla bilmədi: ' + e.message);
             }
         }
 
         function onScanSuccess(decodedText, decodedResult) {
             if (!scanActive) return;
             
+            console.log('QR tapıldı:', decodedText);
             scanActive = false;
             
-            try {
-                processScan(decodedText);
-            } catch (e) {
-                console.error('Xəta:', e);
-                scanActive = true;
-            }
+            processScan(decodedText);
         }
 
-        function onScanError(error) {
-            // Səssiz
+        function onScanError(errorMessage) {
+            // Normal iş rejimində səssiz qalır
         }
 
         async function processScan(qrDataString) {
-            console.log('QR skanlandı:', qrDataString);
-            
             const parts = qrDataString.split('|');
             
             if (parts.length < 2) {
@@ -354,7 +340,7 @@
             const typeId = TICKET_MAP[typeCode];
             
             if (!typeId) {
-                alert('❌ Bilinməyən talon kodu: ' + typeCode);
+                alert('❌ Bilinməyən talon: ' + typeCode);
                 scanActive = true;
                 return;
             }
@@ -364,21 +350,18 @@
             const dateStr = now.toLocaleDateString('az-AZ');
             const timeStr = now.toLocaleTimeString('az-AZ');
 
-            // ✅ GOOGLE SHEETS-DƏN AD SOYAD AL
-            showSyncStatus('Əməkdaş məlumatları yoxlanılır...', 'loading');
-            
+            // Əməkdaş adını al
             let fullName = 'Bilinməyən';
             try {
                 fullName = await getEmployeeName(empId);
             } catch (e) {
-                console.log('Ad soyad alına bilmədi:', e);
+                console.log('Ad alına bilmədi:', e);
             }
-            hideSyncStatus();
 
-            // ✅ EKRANDA GÖSTƏR
+            // Ekranda göstər
             showSuccessScreen(fullName, empId, ticketType.name, dateStr, timeStr);
 
-            // ✅ GOOGLE SHEETS-Ə GÖNDƏR (POST ilə)
+            // Sheets-ə yaz
             const sheetData = {
                 tarix: dateStr,
                 saat: timeStr,
@@ -390,32 +373,21 @@
             };
 
             sendToSheet(sheetData);
-
-            // ✅ GERİ SAYIM
             startCountdown();
         }
 
-        // ✅ ƏMƏKDAŞ ADINI AL (GET ilə)
         async function getEmployeeName(empId) {
-            const url = `${SHEET_API_URL}?action=getEmployee&id=${encodeURIComponent(empId)}`;
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                mode: 'cors'
-            });
-            
-            const text = await response.text();
-            
             try {
-                const data = JSON.parse(text);
+                const url = `${SHEET_API_URL}?action=getEmployee&id=${encodeURIComponent(empId)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
                 if (data.status === 'success' && data.name) {
                     return data.name;
                 }
             } catch (e) {
-                // JSON deyilsə, birbaşa text qaytar
-                return text.trim() || 'Bilinməyən';
+                console.error('Ad alma xətası:', e);
             }
-            
             return 'Bilinməyən';
         }
 
@@ -425,7 +397,6 @@
             document.getElementById('displayTicket').textContent = ticket;
             document.getElementById('displayDate').textContent = date;
             document.getElementById('displayTime').textContent = time;
-            
             document.getElementById('successOverlay').style.display = 'flex';
         }
 
@@ -451,46 +422,26 @@
             }, interval);
         }
 
-        // ✅ POST İLƏ GÖNDƏR (CORS ilə)
         async function sendToSheet(data) {
-            showSyncStatus('Cədvələ yazılır...', 'loading');
-            
             try {
-                const response = await fetch(SHEET_API_URL, {
+                await fetch(SHEET_API_URL, {
                     method: 'POST',
-                    mode: 'cors',
+                    redirect: 'follow',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'text/plain;charset=utf-8',
                     },
                     body: JSON.stringify(data)
                 });
-
-                const result = await response.json();
-                console.log('Server cavabı:', result);
-                
-                if (result.status === 'success') {
-                    showSyncStatus('✅ Yazıldı!', 'success');
-                } else {
-                    showSyncStatus('⚠️ ' + result.message, 'error');
-                }
-                
+                console.log('Məlumat göndərildi');
             } catch (error) {
-                console.error('Xəta:', error);
-                showSyncStatus('❌ Bağlantı xətası', 'error');
-            } finally {
-                setTimeout(() => { hideSyncStatus(); }, 2000);
+                console.error('Göndərmə xətası:', error);
             }
         }
 
-        function showSyncStatus(message, type) {
-            const status = document.getElementById('syncStatus');
-            status.textContent = message;
-            status.className = `sync-status sync-${type}`;
-            status.style.display = 'block';
-        }
-
-        function hideSyncStatus() {
-            document.getElementById('syncStatus').style.display = 'none';
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
         }
     </script>
 </body>
