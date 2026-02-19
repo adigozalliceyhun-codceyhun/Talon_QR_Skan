@@ -2,7 +2,7 @@
 <html lang="az">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GHG Yemək - Skaner</title>
     
     <style>
@@ -10,43 +10,51 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 15px;
         }
 
         .container {
-            max-width: 800px;
+            max-width: 100%;
             margin: 0 auto;
         }
 
         .header {
             text-align: center;
             color: white;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            padding: 10px;
         }
 
         .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 1.8em;
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9em;
         }
 
         .scanner-section {
             background: white;
             border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
         }
 
         .scanner-section h2 {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             color: #333;
+            font-size: 1.1em;
         }
 
         #reader {
@@ -54,32 +62,82 @@
             border-radius: 15px;
             overflow: hidden;
             min-height: 300px;
+            background: #000;
         }
 
         .permission-btn {
-            background: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
+            padding: 18px 30px;
+            border-radius: 15px;
             font-size: 18px;
+            font-weight: 600;
             cursor: pointer;
             margin: 20px auto;
             display: block;
+            width: 90%;
+            max-width: 300px;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s;
         }
 
-        .permission-btn:hover {
-            background: #764ba2;
+        .permission-btn:active {
+            transform: scale(0.95);
         }
 
         .error-box {
             background: #ffebee;
             color: #c62828;
             padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
+            border-radius: 12px;
+            margin: 15px 0;
             text-align: center;
             border: 1px solid #ef9a9a;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .manual-input {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px dashed #e0e0e0;
+        }
+
+        .manual-input h3 {
+            text-align: center;
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 1em;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-manual {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
         }
 
         .success-overlay {
@@ -88,7 +146,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(102, 126, 234, 0.95);
+            background: rgba(76, 175, 80, 0.95);
             display: none;
             justify-content: center;
             align-items: center;
@@ -96,33 +154,49 @@
             animation: fadeIn 0.3s ease;
         }
 
-        .success-content {
+        .error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(244, 67, 54, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .overlay-content {
             background: white;
             border-radius: 20px;
-            padding: 40px;
+            padding: 30px 20px;
             text-align: center;
-            max-width: 450px;
+            max-width: 380px;
             width: 90%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             animation: slideUp 0.4s ease;
         }
 
-        .success-icon {
-            font-size: 80px;
+        .overlay-icon {
+            font-size: 70px;
+            margin-bottom: 15px;
+        }
+
+        .overlay-title {
+            font-size: 28px;
+            font-weight: bold;
             margin-bottom: 20px;
         }
 
-        .success-title {
-            font-size: 32px;
-            color: #4caf50;
-            font-weight: bold;
-            margin-bottom: 30px;
-        }
+        .success-title { color: #4caf50; }
+        .error-title { color: #f44336; }
 
-        .success-details {
+        .details-box {
             background: #f8f9fa;
             border-radius: 15px;
-            padding: 25px;
+            padding: 20px;
             margin-bottom: 20px;
             text-align: left;
         }
@@ -130,9 +204,8 @@
         .detail-row {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
-            font-size: 18px;
-            color: #333;
+            margin-bottom: 12px;
+            font-size: 16px;
         }
 
         .detail-row:last-child {
@@ -140,34 +213,36 @@
         }
 
         .detail-icon {
-            font-size: 24px;
-            margin-right: 15px;
-            width: 30px;
+            font-size: 20px;
+            margin-right: 12px;
+            width: 25px;
             text-align: center;
         }
 
+        .detail-text {
+            flex: 1;
+        }
+
         .detail-label {
-            font-weight: 600;
             color: #666;
-            margin-right: 10px;
-            min-width: 100px;
+            font-size: 0.85em;
+            display: block;
         }
 
         .detail-value {
-            font-weight: bold;
             color: #333;
-            flex: 1;
+            font-weight: 600;
+            font-size: 1.1em;
         }
 
         .employee-name {
             color: #667eea;
-            font-size: 20px;
         }
 
-        .countdown {
+        .countdown-text {
             font-size: 14px;
-            color: #999;
-            margin-top: 20px;
+            color: #666;
+            margin-top: 15px;
         }
 
         .countdown-bar {
@@ -181,7 +256,7 @@
 
         .countdown-progress {
             height: 100%;
-            background: #4caf50;
+            background: currentColor;
             border-radius: 2px;
             width: 100%;
             transition: width 0.1s linear;
@@ -203,10 +278,9 @@
             }
         }
 
-        @media (max-width: 600px) {
-            .header h1 { font-size: 2em; }
-            .success-content { padding: 30px 20px; }
-            .success-title { font-size: 24px; }
+        @media (min-width: 768px) {
+            .container { max-width: 600px; margin: 0 auto; }
+            .header h1 { font-size: 2.2em; }
         }
     </style>
 </head>
@@ -215,57 +289,90 @@
     <div class="container">
         <div class="header">
             <h1>📷 QR SKANER</h1>
+            <p>GHG Yemək Talon Sistemi</p>
         </div>
 
         <div class="scanner-section">
-            <h2>📱 Kameranı talona yaxınlaşdırın</h2>
+            <h2>📱 Kameranı QR koduna yaxınlaşdırın</h2>
             
-            <!-- İcaza düyməsi -->
             <button id="startBtn" class="permission-btn" onclick="startScanner()">
                 🎥 Kameranı Başlat
             </button>
             
             <div id="errorBox" class="error-box" style="display: none;"></div>
             <div id="reader" style="display: none;"></div>
+
+            <!-- Manual giriş (ehtiyat üçün) -->
+            <div class="manual-input" id="manualInput" style="display: none;">
+                <h3>📝 Və ya kodu əl ilə daxil edin</h3>
+                <div class="input-group">
+                    <input type="text" id="manualCode" placeholder="GHG|EMP001|S|20250219|1234" style="font-family: monospace; font-size: 14px;">
+                    <button class="btn-manual" onclick="processManual()">Təsdiqlə</button>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- Uğurlu overlay -->
     <div class="success-overlay" id="successOverlay">
-        <div class="success-content">
-            <div class="success-icon">✅</div>
-            <div class="success-title">TƏSDİQLƏNDİ</div>
+        <div class="overlay-content">
+            <div class="overlay-icon">✅</div>
+            <div class="overlay-title success-title">TƏSDİQLƏNDİ</div>
             
-            <div class="success-details">
+            <div class="details-box">
                 <div class="detail-row">
                     <span class="detail-icon">👤</span>
-                    <span class="detail-label">Ad Soyad:</span>
-                    <span class="detail-value employee-name" id="displayName">-</span>
+                    <div class="detail-text">
+                        <span class="detail-label">Əməkdaş</span>
+                        <span class="detail-value employee-name" id="dispName">-</span>
+                    </div>
                 </div>
                 <div class="detail-row">
                     <span class="detail-icon">🆔</span>
-                    <span class="detail-label">ID:</span>
-                    <span class="detail-value" id="displayId">-</span>
+                    <div class="detail-text">
+                        <span class="detail-label">ID</span>
+                        <span class="detail-value" id="dispId">-</span>
+                    </div>
                 </div>
                 <div class="detail-row">
                     <span class="detail-icon">🍽️</span>
-                    <span class="detail-label">Talon:</span>
-                    <span class="detail-value" id="displayTicket">-</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-icon">📅</span>
-                    <span class="detail-label">Tarix:</span>
-                    <span class="detail-value" id="displayDate">-</span>
+                    <div class="detail-text">
+                        <span class="detail-label">Talon</span>
+                        <span class="detail-value" id="dispTicket">-</span>
+                    </div>
                 </div>
                 <div class="detail-row">
                     <span class="detail-icon">🕐</span>
-                    <span class="detail-label">Saat:</span>
-                    <span class="detail-value" id="displayTime">-</span>
+                    <div class="detail-text">
+                        <span class="detail-label">Vaxt</span>
+                        <span class="detail-value" id="dispTime">-</span>
+                    </div>
                 </div>
             </div>
             
-            <div class="countdown">Yenidən skan üçün gözləyin...</div>
+            <div class="countdown-text">Yenidən skan üçün gözləyin...</div>
             <div class="countdown-bar">
-                <div class="countdown-progress" id="countdownBar"></div>
+                <div class="countdown-progress" id="countdownBar" style="color: #4caf50;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Xəta overlay -->
+    <div class="error-overlay" id="errorOverlay">
+        <div class="overlay-content">
+            <div class="overlay-icon">❌</div>
+            <div class="overlay-title error-title">XƏTA</div>
+            <div class="details-box">
+                <div class="detail-row">
+                    <span class="detail-icon">⚠️</span>
+                    <div class="detail-text">
+                        <span class="detail-value" id="errorText" style="color: #f44336;">Yanlış QR kod</span>
+                    </div>
+                </div>
+            </div>
+            <div class="countdown-text">Yenidən cəhd edin...</div>
+            <div class="countdown-bar">
+                <div class="countdown-progress" id="errorCountdownBar" style="color: #f44336;"></div>
             </div>
         </div>
     </div>
@@ -273,189 +380,244 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <script>
+        // ==========================================
+        // KONFİQURASİYA - Yuxarıdakı sistemlə uyğun
+        // ==========================================
         const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzLzI48FVKOIDG_8xfENiL_3LKY2eRMGZfLH8L4xgdTSs3Xx5QfuPIiT-2UvuxJNoVh/exec';
         
-        let html5QrcodeScanner = null;
-        let scanActive = true;
-        const SCAN_DELAY = 4000;
-        
-        const TICKET_MAP = {
-            'b': 'breakfast',
-            'l': 'lunch', 
-            'd': 'dinner',
-            'dr': 'dry'
+        // Yuxarıdakı sistemlə eyni tip kodları
+        const TICKET_TYPES = {
+            'S': { name: 'Səhər Yeməyi', emoji: '🌅' },
+            'G': { name: 'Günorta Yeməyi', emoji: '🌞' },
+            'A': { name: 'Axşam Yeməyi', emoji: '🌙' },
+            'Q': { name: 'Quru Talon', emoji: '📦' }
         };
 
-        const TICKET_TYPES = [
-            { id: 'breakfast', name: 'Səhər Yeməyi', emoji: '🌅' },
-            { id: 'lunch', name: 'Günorta Yeməyi', emoji: '🌞' },
-            { id: 'dinner', name: 'Axşam Yeməyi', emoji: '🌙' },
-            { id: 'dry', name: 'Quru Talon', emoji: '📦' }
-        ];
+        let html5QrcodeScanner = null;
+        let isScanning = false;
+        let scanCooldown = false;
 
-        // ✅ İSTİFADƏÇİ KLIK EDƏNDƏ BAŞLAT (icaza üçün vacib)
+        // ==========================================
+        // SKANER BAŞLATMA
+        // ==========================================
         async function startScanner() {
             const btn = document.getElementById('startBtn');
             const errorBox = document.getElementById('errorBox');
             const reader = document.getElementById('reader');
+            const manual = document.getElementById('manualInput');
             
             btn.style.display = 'none';
             errorBox.style.display = 'none';
             
             try {
-                // Kamera icazəsini yoxla
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                stream.getTracks().forEach(track => track.stop()); // Test üçün bağla
+                // Kamera icazəsi
+                await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 
-                // İcaza verilib, skaneri başlat
                 reader.style.display = 'block';
+                manual.style.display = 'block';
                 initScanner();
                 
             } catch (err) {
                 console.error('Kamera xətası:', err);
-                errorBox.innerHTML = `
+                showError(`
                     <strong>Kamera açıla bilmədi!</strong><br>
-                    ${err.name}: ${err.message}<br><br>
+                    ${err.message}<br><br>
                     <small>
-                    • Chrome parametrlərində kamera icazəsini yoxlayın<br>
-                    • Başqa proqram kameranı işlətməsin (Zoom, WhatsApp)<br>
-                    • HTTPS bağlantısı olduğunu yoxlayın
+                    • Parametrlərdə kamera icazəsini yoxlayın<br>
+                    • HTTPS bağlantısı olmalıdır<br>
+                    • Aşağıdan kodu əl ilə daxil edə bilərsiniz
                     </small>
-                `;
-                errorBox.style.display = 'block';
-                btn.style.display = 'block';
-                btn.textContent = '🔄 Yenidən Cəhd Et';
+                `);
+                manual.style.display = 'block';
             }
         }
 
         function initScanner() {
             try {
-                if (typeof Html5QrcodeScanner === 'undefined') {
-                    showError('Skaner kitabxanası yüklənmədi');
-                    return;
-                }
+                html5QrcodeScanner = new Html5Qrcode("reader");
+                
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                };
 
-                html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader",
-                    { 
-                        fps: 10, 
-                        qrbox: { width: 250, height: 250 },
-                        aspectRatio: 1.0,
-                        videoConstraints: {
-                            facingMode: "environment" // Arxa kamera (varsa)
-                        }
-                    },
-                    false
+                html5QrcodeScanner.start(
+                    { facingMode: "environment" },
+                    config,
+                    onScanSuccess,
+                    onScanError
                 );
-
-                html5QrcodeScanner.render(onScanSuccess, onScanError);
+                
+                isScanning = true;
                 
             } catch (e) {
                 showError('Skaner başlatma xətası: ' + e.message);
             }
         }
 
+        // ==========================================
+        // QR UĞURLU SKAN
+        // ==========================================
         function onScanSuccess(decodedText, decodedResult) {
-            if (!scanActive) return;
+            if (scanCooldown) return;
             
             console.log('QR tapıldı:', decodedText);
-            scanActive = false;
+            scanCooldown = true;
             
             // Skaneri dayandır
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.pause();
             }
             
-            processScan(decodedText);
+            processQR(decodedText);
         }
 
         function onScanError(errorMessage) {
-            // Normal iş rejimi
+            // Normal iş rejimi - səssiz
         }
 
-        async function processScan(qrDataString) {
-            const parts = qrDataString.split('|');
-            
-            if (parts.length < 2) {
-                alert('❌ Yanlış QR formatı');
-                resetScanner();
-                return;
-            }
-            
-            const empId = parts[0].trim();
-            const typeCode = parts[1].trim();
-            const typeId = TICKET_MAP[typeCode];
-            
-            if (!typeId) {
-                alert('❌ Bilinməyən talon: ' + typeCode);
-                resetScanner();
-                return;
-            }
-
-            const ticketType = TICKET_TYPES.find(t => t.id === typeId);
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('az-AZ');
-            const timeStr = now.toLocaleTimeString('az-AZ');
-
-            // Əməkdaş adını al
-            let fullName = 'Bilinməyən';
+        // ==========================================
+        // QR EMAL (Yuxarıdakı formatla uyğun)
+        // ==========================================
+        async function processQR(qrData) {
             try {
-                fullName = await getEmployeeName(empId);
-            } catch (e) {
-                console.log('Ad alına bilmədi:', e);
-            }
-
-            // Ekranda göstər
-            showSuccessScreen(fullName, empId, ticketType.name, dateStr, timeStr);
-
-            // Sheets-ə yaz
-            const sheetData = {
-                tarix: dateStr,
-                saat: timeStr,
-                id: empId,
-                adSoyad: fullName,
-                talonNovu: ticketType.name,
-                talonId: 'QR-' + Date.now(),
-                status: 'Təsdiqləndi'
-            };
-
-            sendToSheet(sheetData);
-            startCountdown();
-        }
-
-        async function getEmployeeName(empId) {
-            try {
-                const url = `${SHEET_API_URL}?action=getEmployee&id=${encodeURIComponent(empId)}`;
-                const response = await fetch(url);
-                const data = await response.json();
+                // Format: GHG|EMP001|S|20250219|1234
+                const parts = qrData.split('|');
                 
-                if (data.status === 'success' && data.name) {
-                    return data.name;
+                if (parts.length < 4) {
+                    throw new Error('Yanlış QR formatı. Gözlənilən: GHG|ID|TIP|TARIX|KOD');
                 }
-            } catch (e) {
-                console.error('Ad alma xətası:', e);
+
+                const prefix = parts[0].trim();
+                const empId = parts[1].trim();
+                const typeCode = parts[2].trim();
+                const dateStr = parts[3].trim();
+                
+                // Yoxlama
+                if (prefix !== 'GHG') {
+                    throw new Error('Yanlış sistem kodu: ' + prefix);
+                }
+                
+                if (!TICKET_TYPES[typeCode]) {
+                    throw new Error('Bilinməyən talon tipi: ' + typeCode);
+                }
+
+                // Tarix yoxlaması (bugün olmalıdır)
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0].replace(/-/g, '');
+                
+                if (dateStr !== todayStr) {
+                    throw new Error('Köhnə talon! Tarix: ' + dateStr);
+                }
+
+                // Əməkdaş adını al
+                let fullName = await fetchEmployeeName(empId);
+                
+                // Uğurlu ekran
+                showSuccess(fullName, empId, typeCode);
+                
+                // Sheets-ə yaz
+                logToSheet({
+                    tarix: today.toLocaleDateString('az-AZ'),
+                    saat: today.toLocaleTimeString('az-AZ'),
+                    id: empId,
+                    adSoyad: fullName,
+                    talonNovu: TICKET_TYPES[typeCode].name,
+                    qrData: qrData,
+                    status: 'Təsdiqləndi'
+                });
+
+            } catch (error) {
+                console.error('Emal xətası:', error);
+                showErrorOverlay(error.message);
             }
-            return 'Bilinməyən';
         }
 
-        function showSuccessScreen(name, id, ticket, date, time) {
-            document.getElementById('displayName').textContent = name;
-            document.getElementById('displayId').textContent = id;
-            document.getElementById('displayTicket').textContent = ticket;
-            document.getElementById('displayDate').textContent = date;
-            document.getElementById('displayTime').textContent = time;
+        // Manual giriş
+        function processManual() {
+            const code = document.getElementById('manualCode').value.trim();
+            if (code) {
+                scanCooldown = true;
+                processQR(code);
+            }
+        }
+
+        // ==========================================
+        // ƏMƏKDAŞ ADINI ÇƏKMƏ (Apps Script-dən)
+        // ==========================================
+        async function fetchEmployeeName(empId) {
+            try {
+                // CORS problemini bypass etmək üçün JSONP tipli çağırış
+                const url = `${SHEET_API_URL}?action=getName&id=${encodeURIComponent(empId)}&callback=handleName`;
+                
+                // Promise ilə gözlə
+                return new Promise((resolve, reject) => {
+                    // Global callback
+                    window.handleName = function(data) {
+                        if (data && data.name) {
+                            resolve(data.name);
+                        } else {
+                            resolve('Bilinməyən əməkdaş');
+                        }
+                        delete window.handleName;
+                    };
+                    
+                    // Script tag ilə çağır (CORS bypass)
+                    const script = document.createElement('script');
+                    script.src = url;
+                    script.onerror = () => {
+                        resolve('Bilinməyən əməkdaş');
+                        delete window.handleName;
+                    };
+                    
+                    // Timeout
+                    setTimeout(() => {
+                        if (window.handleName) {
+                            resolve('Bilinməyən əməkdaş');
+                            delete window.handleName;
+                        }
+                    }, 3000);
+                    
+                    document.head.appendChild(script);
+                });
+                
+            } catch (e) {
+                console.error('Ad çəkmə xətası:', e);
+                return 'Bilinməyən əməkdaş';
+            }
+        }
+
+        // ==========================================
+        // EKRANLAR
+        // ==========================================
+        function showSuccess(name, id, typeCode) {
+            const ticket = TICKET_TYPES[typeCode];
+            const now = new Date();
+            
+            document.getElementById('dispName').textContent = name;
+            document.getElementById('dispId').textContent = id;
+            document.getElementById('dispTicket').textContent = `${ticket.emoji} ${ticket.name}`;
+            document.getElementById('dispTime').textContent = now.toLocaleTimeString('az-AZ');
+            
             document.getElementById('successOverlay').style.display = 'flex';
+            startCountdown('success');
         }
 
-        function hideSuccessScreen() {
-            document.getElementById('successOverlay').style.display = 'none';
+        function showErrorOverlay(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorOverlay').style.display = 'flex';
+            startCountdown('error');
         }
 
-        function startCountdown() {
-            const bar = document.getElementById('countdownBar');
+        function startCountdown(type) {
+            const bar = document.getElementById(type === 'success' ? 'countdownBar' : 'errorCountdownBar');
+            const overlay = document.getElementById(type === 'success' ? 'successOverlay' : 'errorOverlay');
+            const duration = type === 'success' ? 4000 : 3000;
+            
             let width = 100;
             const interval = 50;
-            const step = 100 / (SCAN_DELAY / interval);
+            const step = 100 / (duration / interval);
             
             const timer = setInterval(() => {
                 width -= step;
@@ -463,38 +625,39 @@
                 
                 if (width <= 0) {
                     clearInterval(timer);
-                    hideSuccessScreen();
+                    overlay.style.display = 'none';
                     resetScanner();
                 }
             }, interval);
         }
 
         function resetScanner() {
-            scanActive = true;
-            if (html5QrcodeScanner) {
+            scanCooldown = false;
+            if (html5QrcodeScanner && isScanning) {
                 html5QrcodeScanner.resume();
             }
         }
 
-        async function sendToSheet(data) {
-            try {
-                await fetch(SHEET_API_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: {
-                        'Content-Type': 'text/plain;charset=utf-8',
-                    },
-                    body: JSON.stringify(data)
-                });
-            } catch (error) {
-                console.error('Göndərmə xətası:', error);
-            }
+        // ==========================================
+        // SHEETS-Ə YAZMA
+        // ==========================================
+        function logToSheet(data) {
+            // CORS üçün no-cors rejimi (data göndərilir, cavab yoxlanılmır)
+            fetch(SHEET_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            }).catch(e => console.log('Göndərmə xətası (göz ardı edilir):', e));
         }
 
-        function showError(msg) {
-            const errorBox = document.getElementById('errorBox');
-            errorBox.innerHTML = msg;
-            errorBox.style.display = 'block';
+        function showError(html) {
+            const box = document.getElementById('errorBox');
+            box.innerHTML = html;
+            box.style.display = 'block';
+            document.getElementById('startBtn').style.display = 'block';
         }
     </script>
 </body>
