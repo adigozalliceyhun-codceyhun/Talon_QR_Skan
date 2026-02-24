@@ -100,6 +100,8 @@
     let countdownInterval = null;
     let pendingConfirmToken = null;
 
+    const SCAN_RETURN_SECONDS = 5;
+
     function fetchJSONP(url) {
       return new Promise((resolve, reject) => {
         const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
@@ -159,7 +161,7 @@
       countdownEl.style.display = 'block';
       countdownText.style.display = 'block';
 
-      let seconds = 5;
+      let seconds = SCAN_RETURN_SECONDS;
       countdownEl.textContent = seconds;
 
       if (countdownInterval) clearInterval(countdownInterval);
@@ -187,24 +189,41 @@
       card.className = 'result-card result-' + resultType;
 
       const confirmBtn = document.getElementById('confirmBtn');
+      const closeBtn = document.getElementById('closeBtn');
       pendingConfirmToken = confirmToken || null;
+
+      closeBtn.disabled = false;
+      closeBtn.style.opacity = '1';
+      closeBtn.style.cursor = 'pointer';
 
       if (resultType === 'success'){
         icon.textContent='✓'; title.textContent='Təsdiqləndi';
         confirmBtn.style.display='none';
+        closeBtn.disabled = true;
+        closeBtn.style.opacity = '.6';
+        closeBtn.style.cursor = 'not-allowed';
         startCountdown();
       } else if (resultType === 'warning'){
         icon.textContent='⚠'; title.textContent='Xəbərdarlıq';
         confirmBtn.style.display='none';
+        closeBtn.disabled = true;
+        closeBtn.style.opacity = '.6';
+        closeBtn.style.cursor = 'not-allowed';
         startCountdown();
       } else if (resultType === 'confirm'){
         icon.textContent='?'; title.textContent='Təsdiq';
         confirmBtn.style.display='block';
+        closeBtn.disabled = false;
+        closeBtn.style.opacity = '1';
+        closeBtn.style.cursor = 'pointer';
         document.getElementById('countdown').style.display='none';
         document.getElementById('countdownText').style.display='none';
       } else {
         icon.textContent='✕'; title.textContent='Xəta';
         confirmBtn.style.display='none';
+        closeBtn.disabled = true;
+        closeBtn.style.opacity = '.6';
+        closeBtn.style.cursor = 'not-allowed';
         startCountdown();
       }
 
@@ -215,6 +234,10 @@
       document.getElementById('resultOverlay').style.display='none';
       isProcessing = false;
       pendingConfirmToken = null;
+      const closeBtn = document.getElementById('closeBtn');
+      closeBtn.disabled = false;
+      closeBtn.style.opacity = '1';
+      closeBtn.style.cursor = 'pointer';
       updateStatus('waiting','QR kod gözlənilir...');
     }
 
@@ -266,6 +289,8 @@
     };
 
     document.getElementById('closeBtn').onclick = () => {
+      const closeBtn = document.getElementById('closeBtn');
+      if (closeBtn.disabled) return;
       if (countdownInterval) clearInterval(countdownInterval);
       hideResult();
     };
