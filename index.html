@@ -94,6 +94,11 @@
   <script>
     const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxtHn5BnqLDYJj3HYe_0LZEQtX5B5AjLUUapjUmlj3jn1sCGsZmAIW817qfr9lQlh-i/exec';
 
+    // Quru talon qaydası:
+    // 1-ci oxutma -> "Təsdiq" (düyməsiz)
+    // 2-ci oxutma -> "Təsdiq" (düyməli, basanda təsdiqlənir)
+    // 3-cü oxutma -> "Təkrar cəhd" (Sheet-ə də düşməsi üçün scanTicket yenə çağrılır)
+
     const COUNTDOWN_SECONDS = 5;
     const LAST_QR_COOLDOWN_MS = 900;
 
@@ -111,14 +116,14 @@
     let lastQrText = '';
     let lastQrAt = 0;
 
-    // ✅ Quru sayğacı: 0=1-ci oxunacaq, 1=2-ci oxunacaq (confirm düyməli), 2=3-cü -> təkrar cəhd
+    // ✅ Quru sayğacı: 0=heç, 1=1-ci göstərildi, 2=2-ci təsdiqləndi (3-cü -> təkrar cəhd)
     const dryCountMap = new Map(); // qrData -> {count, ts}
     const DRY_TTL_MS = 24 * 60 * 60 * 1000;
 
     function isDryQR(qrData){
       const parts = String(qrData || '').split('|');
-      const code = parts[2];   // Q
-      const last = parts[5];   // dry
+      const code = parts[2];
+      const last = parts[5];
       return code === 'Q' || last === 'dry' || String(qrData).includes('|Q|') || String(qrData).includes('|dry');
     }
 
@@ -133,24 +138,43 @@
       dryCountMap.set(qrData, {count, ts: Date.now()});
     }
 
-    function fetchJSONP(url) {
+    // ✅ Daha stabil JSONP (timeout clear + retry)
+    function fetchJSONP(url, { timeoutMs = 12000, retry = 1 } = {}) {
       return new Promise((resolve, reject) => {
+        if (navigator && navigator.onLine === false) {
+          return reject(new Error('OFFLINE'));
+        }
+
         const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
         const script = document.createElement('script');
+        script.async = true;
+        script.referrerPolicy = 'no-referrer';
+
+        let timer = null;
+
+        function cleanup(){
+          if (timer) clearTimeout(timer);
+          timer = null;
+          if (window[cb]) delete window[cb];
+          if (script && script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        function fail(err){
+          cleanup();
+          if (retry > 0) {
+            return resolve(fetchJSONP(url, { timeoutMs, retry: retry - 1 }));
+          }
+          reject(err);
+        }
 
         window[cb] = (data) => {
-          delete window[cb];
-          script.remove();
+          cleanup();
           resolve(data);
         };
 
-        const t = setTimeout(() => {
-          if (window[cb]) delete window[cb];
-          script.remove();
-          reject(new Error('Timeout'));
-        }, 8000);
+        timer = setTimeout(() => fail(new Error('TIMEOUT')), timeoutMs);
 
-        script.onerror = () => { clearTimeout(t); reject(new Error('Load error')); };
+        script.onerror = () => fail(new Error('LOAD_ERROR'));
         script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
         document.head.appendChild(script);
       });
@@ -229,7 +253,6 @@
 
       pendingConfirmToken = confirmToken || null;
 
-      // default
       confirmBtn.style.display = showConfirmBtn ? 'block' : 'none';
       confirmBtn.disabled = false;
       confirmBtn.textContent = '✅ Təsdiq et';
@@ -237,6 +260,10 @@
       closeBtn.disabled = false;
       closeBtn.style.opacity = '1';
       closeBtn.style.cursor = 'pointer';
+
+      // default countdown hide (sonra lazımdırsa açırıq)
+      document.getElementById('countdown').style.display='none';
+      document.getElementById('countdownText').style.display='none';
 
       if (resultType === 'success'){
         icon.textContent='✓'; title.textContent='Təsdiqləndi';
@@ -248,9 +275,7 @@
         if (autoClose) startCountdown();
       } else if (resultType === 'confirm'){
         icon.textContent='?'; title.textContent='Təsdiq';
-        // confirm ekranda countdown göstərməyək
-        document.getElementById('countdown').style.display='none';
-        document.getElementById('countdownText').style.display='none';
+        // confirm ekranda countdown yoxdur
         if (countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
       } else {
         icon.textContent='✕'; title.textContent='Xəta';
@@ -292,7 +317,7 @@
 
       try{
         // ✅ HƏR SKANDA serverə gedirik -> Sheet yazılsın
-        const res = await fetchJSONP(`${SHEET_API_URL}?action=scanTicket&qrData=${encodeURIComponent(qrData)}`);
+        const res = await fetchJSONP(`${SHEET_API_URL}?action=scanTicket&qrData=${encodeURIComponent(qrData)}`, { timeoutMs: 12000, retry: 1 });
 
         const name = res.data?.adSoyad || '-';
         const id = res.data?.empId || '-';
@@ -302,7 +327,7 @@
         if (dry){
           const c = getDryCount(qrData);
 
-          // 3-cü dəfə (və sonrası) -> Təkrar cəhd (və server artıq Sheet-ə yazıb)
+          // 3-cü dəfə (və sonrası) -> Təkrar cəhd (server artıq sheet-ə yazdı)
           if (c >= 2){
             updateStatus('warning','Təkrar cəhd');
             addScan({name, id, type:'Quru Talon', msg:'Təkrar cəhd', warn:true, err:false});
@@ -312,15 +337,15 @@
 
           // 1-ci dəfə -> “Təsdiq” (DÜYMƏSİZ)
           if (c === 0){
-            setDryCount(qrData, 1); // növbəti oxutmada düymə çıxsın
+            setDryCount(qrData, 1);
 
             updateStatus('warning','Təsdiq');
-            addScan({name, id, type:'Quru Talon', msg:'Təsdiq tələb olunur (1-ci)', warn:true, err:false});
+            addScan({name, id, type:'Quru Talon', msg:'Təsdiq (1-ci oxutma)', warn:true, err:false});
 
             showResult({
               resultType:'confirm',
               name, id, type:'Quru Talon',
-              statusText:'Təsdiq tələb olunur. 2-ci dəfə oxudun, sonra təsdiq et.',
+              statusText:'Təsdiq. 2-ci dəfə oxudun, sonra təsdiq et.',
               showConfirmBtn:false,
               autoClose:false
             });
@@ -340,7 +365,7 @@
             pendingConfirmMeta = { name, id, type:'Quru Talon' };
 
             updateStatus('warning','Təsdiq');
-            addScan({name, id, type:'Quru Talon', msg:'Təsdiq tələb olunur (2-ci)', warn:true, err:false});
+            addScan({name, id, type:'Quru Talon', msg:'Təsdiq (2-ci oxutma)', warn:true, err:false});
 
             showResult({
               resultType:'confirm',
@@ -354,7 +379,7 @@
           }
         }
 
-        // ✅ Digər talonlar: serverin cavabını normal göstər
+        // Digər talonlar (server nə qaytarsa onu göstər)
         if (res.status === 'success'){
           updateStatus('success', res.message || 'Təsdiqləndi');
           addScan({name, id, type:ticketType, msg:res.message || 'Təsdiqləndi', warn:false, err:false});
@@ -395,10 +420,17 @@
         updateStatus('error', res.message || 'Xəta');
         addScan({name:'Xəta', id:'-', type:'-', msg:res.message || 'Xəta', err:true});
         showResult({resultType:'error', name:'Xəta', id:'-', type:'-', statusText:res.message || 'Xəta', autoClose:true});
+
       }catch(e){
-        updateStatus('error','Serverə qoşulmadı');
-        addScan({name:'Bağlantı xətası', id:'-', type:'-', msg:'Serverə qoşulmadı', err:true});
-        showResult({resultType:'error', name:'Bağlantı xətası', id:'-', type:'-', statusText:'Serverə qoşulmadı', autoClose:true});
+        const reason =
+          e.message === 'OFFLINE' ? 'İnternet yoxdur (offline)' :
+          e.message === 'TIMEOUT' ? 'Server cavab vermədi (timeout)' :
+          e.message === 'LOAD_ERROR' ? 'Server cavabı yüklənmədi' :
+          'Serverə qoşulmadı';
+
+        updateStatus('error', reason);
+        addScan({name:'Bağlantı xətası', id:'-', type:'-', msg:reason, err:true});
+        showResult({resultType:'error', name:'Bağlantı xətası', id:'-', type:'-', statusText:reason, autoClose:true});
       }
     }
 
@@ -412,26 +444,31 @@
       const token = pendingConfirmToken || '';
 
       try{
-        // ✅ 2-ci quru təsdiqi: Sheet-ə də getməlidir
+        // Sheet-ə düşməsi üçün serverə göndəririk
         const url =
           `${SHEET_API_URL}?action=confirmDrySecond` +
           `&token=${encodeURIComponent(token)}` +
           `&confirmToken=${encodeURIComponent(token)}` +
           `&qrData=${encodeURIComponent(qrData)}`;
 
-        const res = await fetchJSONP(url);
+        const res = await fetchJSONP(url, { timeoutMs: 12000, retry: 1 });
 
-        // Quru talonda təsdiq oldu -> count=2 (3-cü təkrar cəhd olacaq)
+        // ✅ 2-ci quru təsdiqləndi -> count=2 (3-cü təkrar cəhd olacaq)
         if (isDryQR(qrData) || String(meta.type).toLowerCase().includes('quru')){
           setDryCount(qrData, 2);
         }
 
-        // UX: təsdiqləndi
-        updateStatus('success','Təsdiqləndi');
-        addScan({name: meta.name, id: meta.id, type: meta.type, msg: 'Təsdiqləndi', warn:false, err:false});
-        showResult({resultType:'success', name: meta.name, id: meta.id, type: meta.type, statusText: 'Təsdiqləndi ✅', autoClose:true});
+        updateStatus('warning','Təsdiq');
+        addScan({name: meta.name, id: meta.id, type: meta.type, msg: 'Təsdiq olundu', warn:true, err:false});
+        showResult({
+          resultType:'confirm',
+          name: meta.name, id: meta.id, type: meta.type,
+          statusText: 'Təsdiq ✅',
+          showConfirmBtn:false,
+          autoClose:false
+        });
 
-        // server açıq error verərsə göstər (istəsən)
+        // Əgər server error qaytarsa göstər (opsional)
         if (res && (res.status === 'error' || res.status === 'failed')){
           updateStatus('error', res.message || 'Təsdiq alınmadı');
           addScan({name: meta.name, id: meta.id, type: meta.type, msg: res.message || 'Təsdiq alınmadı', err:true});
@@ -440,8 +477,15 @@
         }
 
       }catch(e){
-        // server geciksə belə, UI istifadəçi üçün ok
-        addScan({name: meta.name, id: meta.id, type: meta.type, msg: 'Server cavabı gecikdi', warn:true, err:false});
+        const reason =
+          e.message === 'OFFLINE' ? 'İnternet yoxdur (offline)' :
+          e.message === 'TIMEOUT' ? 'Server cavab vermədi (timeout)' :
+          e.message === 'LOAD_ERROR' ? 'Server cavabı yüklənmədi' :
+          'Serverə qoşulmadı';
+
+        updateStatus('error', reason);
+        addScan({name: meta.name, id: meta.id, type: meta.type, msg: reason, err:true});
+        showResult({resultType:'error', name: meta.name, id: meta.id, type: meta.type, statusText: reason, autoClose:true});
       } finally {
         btn.textContent = 'Göndərildi ✅';
       }
