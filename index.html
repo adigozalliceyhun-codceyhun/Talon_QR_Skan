@@ -96,7 +96,7 @@
 
     const COUNTDOWN_SECONDS = 5;
 
-    // ✅ SÜRƏT üçün: eyni QR-ni 1-2 saniyə içində təkrar göndərməsin
+    // ✅ eyni QR spamını kəs: sürət + sabitlik
     const LAST_QR_COOLDOWN_MS = 1200;
 
     let isProcessing = false;
@@ -105,7 +105,6 @@
     let countdownInterval = null;
     let pendingConfirmToken = null;
 
-    // dedup
     let lastQrText = '';
     let lastQrAt = 0;
 
@@ -202,11 +201,19 @@
 
       const confirmBtn = document.getElementById('confirmBtn');
       const closeBtn = document.getElementById('closeBtn');
+
       pendingConfirmToken = confirmToken || null;
 
+      // close default aktiv
       closeBtn.disabled = false;
       closeBtn.style.opacity = '1';
       closeBtn.style.cursor = 'pointer';
+
+      // confirm default
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = '1';
+      confirmBtn.style.cursor = 'pointer';
+      confirmBtn.textContent = '✅ Təsdiq et';
 
       if (resultType === 'success'){
         icon.textContent='✓'; title.textContent='Təsdiqləndi';
@@ -221,9 +228,20 @@
       } else if (resultType === 'confirm'){
         icon.textContent='?'; title.textContent='Təsdiq';
         confirmBtn.style.display='block';
+
+        // confirm modunda countdown olmasın
         document.getElementById('countdown').style.display='none';
         document.getElementById('countdownText').style.display='none';
         if (countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+
+        // ✅ token yoxdursa düyməni deaktiv et (operator boşuna basmasın)
+        if (!pendingConfirmToken){
+          confirmBtn.disabled = true;
+          confirmBtn.style.opacity = '.6';
+          confirmBtn.style.cursor = 'not-allowed';
+          confirmBtn.textContent = 'Token yoxdur';
+          updateStatus('error', 'Təsdiq tokeni gəlmədi (server cavabı).');
+        }
       } else {
         icon.textContent='✕'; title.textContent='Xəta';
         confirmBtn.style.display='none';
@@ -243,6 +261,7 @@
       closeBtn.style.opacity = '1';
       closeBtn.style.cursor = 'pointer';
 
+      // countdown default gizlət
       document.getElementById('countdown').style.display='none';
       document.getElementById('countdownText').style.display='none';
 
@@ -260,8 +279,9 @@
     }
 
     async function handleScan(qrData){
-      if (shouldDropDuplicate(qrData)) return;   // ✅ eyni QR spamını kəs
+      if (shouldDropDuplicate(qrData)) return;
       if (isProcessing) return;
+
       isProcessing = true;
       updateStatus('scanning','Yoxlanılır...');
 
@@ -281,8 +301,22 @@
         }
 
         if (res.status === 'confirm'){
+          // ✅ token-i robust götür (server hansı adla göndərsə də işləsin)
+          const token =
+            res.token ||
+            res.confirmToken ||
+            (res.data && (res.data.token || res.data.confirmToken)) ||
+            null;
+
           addScan({name: res.data.adSoyad, id: res.data.empId, type: res.data.ticketType, msg: res.message, warn:true, err:false});
-          showResult({resultType:'confirm', name:res.data.adSoyad, id:res.data.empId, type:res.data.ticketType, statusText:res.message, confirmToken: res.token});
+          showResult({
+            resultType:'confirm',
+            name:res.data.adSoyad,
+            id:res.data.empId,
+            type:res.data.ticketType,
+            statusText:res.message,
+            confirmToken: token
+          });
           return;
         }
 
@@ -295,14 +329,39 @@
     }
 
     document.getElementById('confirmBtn').onclick = async () => {
+      const btn = document.getElementById('confirmBtn');
       if (!pendingConfirmToken) return;
+
+      // ✅ klikdə vizual feedback
+      btn.disabled = true;
+      const old = btn.textContent;
+      btn.textContent = 'Göndərilir...';
+
       try{
-        // confirm zamanı scan lock qalır
         const res = await fetchJSONP(`${SHEET_API_URL}?action=confirmDrySecond&token=${encodeURIComponent(pendingConfirmToken)}`);
-        addScan({name: res.data?.adSoyad || '-', id: res.data?.empId || '-', type: res.data?.ticketType || '-', msg: res.message || 'Təkrar cəhd', warn:true, err:false});
-        showResult({resultType:'warning', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Təkrar cəhd'});
+
+        addScan({
+          name: res.data?.adSoyad || '-',
+          id: res.data?.empId || '-',
+          type: res.data?.ticketType || '-',
+          msg: res.message || 'Təsdiqləndi',
+          warn: (res.status !== 'success'),
+          err: false
+        });
+
+        // server nə qaytarırsa ona görə göstər
+        if (res.status === 'success'){
+          showResult({resultType:'success', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Təsdiqləndi'});
+        } else if (res.status === 'warning'){
+          showResult({resultType:'warning', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Xəbərdarlıq'});
+        } else {
+          showResult({resultType:'warning', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Təkrar cəhd'});
+        }
       }catch(e){
         showResult({resultType:'error', name:'Xəta', id:'-', type:'-', statusText:'Təsdiq göndərilmədi'});
+      }finally{
+        btn.disabled = false;
+        btn.textContent = old;
       }
     };
 
@@ -318,10 +377,10 @@
       html5QrCode.start(
         { facingMode:"environment" },
         {
-          fps: 18,                         // ✅ daha tez oxu
-          qrbox: { width: 280, height: 280 }, // ✅ daha rahat tutma
-          aspectRatio: 1.7777778,          // ✅ stabil preview
-          disableFlip: true               // ✅ lazımsız çevirmə yox
+          fps: 18,
+          qrbox: { width: 280, height: 280 },
+          aspectRatio: 1.7777778,
+          disableFlip: true
         },
         (text)=>{ if (!isProcessing) handleScan(text); },
         ()=>{}
