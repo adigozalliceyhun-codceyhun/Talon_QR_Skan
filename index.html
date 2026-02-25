@@ -95,15 +95,16 @@
     const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxtHn5BnqLDYJj3HYe_0LZEQtX5B5AjLUUapjUmlj3jn1sCGsZmAIW817qfr9lQlh-i/exec';
 
     const COUNTDOWN_SECONDS = 5;
-
-    // ✅ eyni QR spamını kəs: sürət + sabitlik
     const LAST_QR_COOLDOWN_MS = 1200;
 
     let isProcessing = false;
     let scanHistory = [];
     let html5QrCode = null;
     let countdownInterval = null;
+
+    // ✅ confirm üçün: token + həmin QR (backend bəzən qrData da istəyir)
     let pendingConfirmToken = null;
+    let pendingConfirmQrData = null;
 
     let lastQrText = '';
     let lastQrAt = 0;
@@ -204,12 +205,10 @@
 
       pendingConfirmToken = confirmToken || null;
 
-      // close default aktiv
       closeBtn.disabled = false;
       closeBtn.style.opacity = '1';
       closeBtn.style.cursor = 'pointer';
 
-      // confirm default
       confirmBtn.disabled = false;
       confirmBtn.style.opacity = '1';
       confirmBtn.style.cursor = 'pointer';
@@ -229,12 +228,10 @@
         icon.textContent='?'; title.textContent='Təsdiq';
         confirmBtn.style.display='block';
 
-        // confirm modunda countdown olmasın
         document.getElementById('countdown').style.display='none';
         document.getElementById('countdownText').style.display='none';
         if (countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
 
-        // ✅ token yoxdursa düyməni deaktiv et (operator boşuna basmasın)
         if (!pendingConfirmToken){
           confirmBtn.disabled = true;
           confirmBtn.style.opacity = '.6';
@@ -254,18 +251,19 @@
 
     function hideResult(){
       document.getElementById('resultOverlay').style.display='none';
+
+      // reset confirm context
       pendingConfirmToken = null;
+      pendingConfirmQrData = null;
 
       const closeBtn = document.getElementById('closeBtn');
       closeBtn.disabled = false;
       closeBtn.style.opacity = '1';
       closeBtn.style.cursor = 'pointer';
 
-      // countdown default gizlət
       document.getElementById('countdown').style.display='none';
       document.getElementById('countdownText').style.display='none';
 
-      // ✅ tez qayıt
       isProcessing = false;
       updateStatus('waiting','QR kod gözlənilir...');
     }
@@ -301,12 +299,16 @@
         }
 
         if (res.status === 'confirm'){
-          // ✅ token-i robust götür (server hansı adla göndərsə də işləsin)
+          // ✅ token-i robust götür
           const token =
             res.token ||
             res.confirmToken ||
-            (res.data && (res.data.token || res.data.confirmToken)) ||
+            res.data?.token ||
+            res.data?.confirmToken ||
             null;
+
+          // ✅ confirm üçün həmin QR-i də saxla (bəzən backend bunu istəyir)
+          pendingConfirmQrData = qrData;
 
           addScan({name: res.data.adSoyad, id: res.data.empId, type: res.data.ticketType, msg: res.message, warn:true, err:false});
           showResult({
@@ -332,13 +334,19 @@
       const btn = document.getElementById('confirmBtn');
       if (!pendingConfirmToken) return;
 
-      // ✅ klikdə vizual feedback
       btn.disabled = true;
-      const old = btn.textContent;
+      const oldText = btn.textContent;
       btn.textContent = 'Göndərilir...';
 
       try{
-        const res = await fetchJSONP(`${SHEET_API_URL}?action=confirmDrySecond&token=${encodeURIComponent(pendingConfirmToken)}`);
+        // ✅ ən kritik fix: backend hansı parametri gözləsə də işləsin
+        const url =
+          `${SHEET_API_URL}?action=confirmDrySecond` +
+          `&token=${encodeURIComponent(pendingConfirmToken || '')}` +
+          `&confirmToken=${encodeURIComponent(pendingConfirmToken || '')}` +
+          `&qrData=${encodeURIComponent(pendingConfirmQrData || '')}`;
+
+        const res = await fetchJSONP(url);
 
         addScan({
           name: res.data?.adSoyad || '-',
@@ -349,7 +357,6 @@
           err: false
         });
 
-        // server nə qaytarırsa ona görə göstər
         if (res.status === 'success'){
           showResult({resultType:'success', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Təsdiqləndi'});
         } else if (res.status === 'warning'){
@@ -361,7 +368,7 @@
         showResult({resultType:'error', name:'Xəta', id:'-', type:'-', statusText:'Təsdiq göndərilmədi'});
       }finally{
         btn.disabled = false;
-        btn.textContent = old;
+        btn.textContent = oldText;
       }
     };
 
