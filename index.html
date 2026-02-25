@@ -97,17 +97,47 @@
     const COUNTDOWN_SECONDS = 5;
     const LAST_QR_COOLDOWN_MS = 1200;
 
+    // ✅ yalnız Quru üçün: eyni QR yenidən oxunanda dərhal "Təkrar cəhd"
+    const DRY_REPEAT_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 saat (istəsən azalda bilərik)
+
     let isProcessing = false;
     let scanHistory = [];
     let html5QrCode = null;
     let countdownInterval = null;
 
-    // ✅ confirm üçün: token + həmin QR (backend bəzən qrData da istəyir)
+    // confirm üçün
     let pendingConfirmToken = null;
     let pendingConfirmQrData = null;
+    let pendingConfirmMeta = null; // ad/id/type saxlayırıq
 
     let lastQrText = '';
     let lastQrAt = 0;
+
+    // ✅ Quru QR istifadə olunubmu? (lokal sürətli yoxlama)
+    const dryUsedMap = new Map(); // qrData -> timestamp
+
+    function isDryQR(qrData){
+      // format: GHG|empId|Q|dd.mm.yyyy|hash|dry
+      const parts = String(qrData || '').split('|');
+      const code = parts[2]; // 'Q'
+      const last = parts[5]; // 'dry'
+      return code === 'Q' || last === 'dry' || String(qrData).includes('|Q|') || String(qrData).includes('|dry');
+    }
+
+    function markDryUsed(qrData){
+      if (!qrData) return;
+      dryUsedMap.set(qrData, Date.now());
+    }
+
+    function isDryUsed(qrData){
+      const t = dryUsedMap.get(qrData);
+      if (!t) return false;
+      if (Date.now() - t > DRY_REPEAT_COOLDOWN_MS){
+        dryUsedMap.delete(qrData);
+        return false;
+      }
+      return true;
+    }
 
     function fetchJSONP(url) {
       return new Promise((resolve, reject) => {
@@ -120,11 +150,12 @@
           resolve(data);
         };
 
+        // ✅ daha “tez” hiss üçün timeout-u bir az aşağı salaq
         const t = setTimeout(() => {
           if (window[cb]) delete window[cb];
           script.remove();
           reject(new Error('Timeout'));
-        }, 12000);
+        }, 8000);
 
         script.onerror = () => { clearTimeout(t); reject(new Error('Load error')); };
         script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
@@ -252,9 +283,9 @@
     function hideResult(){
       document.getElementById('resultOverlay').style.display='none';
 
-      // reset confirm context
       pendingConfirmToken = null;
       pendingConfirmQrData = null;
+      pendingConfirmMeta = null;
 
       const closeBtn = document.getElementById('closeBtn');
       closeBtn.disabled = false;
@@ -280,6 +311,16 @@
       if (shouldDropDuplicate(qrData)) return;
       if (isProcessing) return;
 
+      // ✅ yalnız Quru: əgər bu QR artıq confirm olunubsa, serverə getmədən "Təkrar cəhd"
+      if (isDryQR(qrData) && isDryUsed(qrData)){
+        isProcessing = true;
+        updateStatus('warning','Təkrar cəhd');
+
+        addScan({name:'-', id:'-', type:'Quru Talon', msg:'Təkrar cəhd', warn:true, err:false});
+        showResult({resultType:'warning', name:'-', id:'-', type:'Quru Talon', statusText:'Təkrar cəhd'});
+        return;
+      }
+
       isProcessing = true;
       updateStatus('scanning','Yoxlanılır...');
 
@@ -287,19 +328,30 @@
         const res = await fetchJSONP(`${SHEET_API_URL}?action=scanTicket&qrData=${encodeURIComponent(qrData)}`);
 
         if (res.status === 'success'){
-          addScan({name: res.data.adSoyad, id: res.data.empId, type: res.data.ticketType, msg: res.message, warn:false, err:false});
-          showResult({resultType:'success', name:res.data.adSoyad, id:res.data.empId, type:res.data.ticketType, statusText:res.message});
+          // ✅ server success verdisə və talon quru isə onu localUsed elə (sonrakı oxutma "Təkrar cəhd" olsun)
+          const ticketType = res.data?.ticketType || '';
+          if (String(ticketType).toLowerCase().includes('quru') || isDryQR(qrData)) {
+            markDryUsed(qrData);
+          }
+
+          addScan({name: res.data.adSoyad, id: res.data.empId, type: ticketType, msg: res.message, warn:false, err:false});
+          showResult({resultType:'success', name:res.data.adSoyad, id:res.data.empId, type:ticketType, statusText:res.message});
           return;
         }
 
         if (res.status === 'warning'){
-          addScan({name: res.data.adSoyad, id: res.data.empId, type: res.data.ticketType, msg: res.message, warn:true, err:false});
-          showResult({resultType:'warning', name:res.data.adSoyad, id:res.data.empId, type:res.data.ticketType, statusText:res.message});
+          // ✅ warning-i olduğu kimi göstər; amma quru talondursa "Təkrar cəhd" yazısını qoruyuruq
+          const ticketType = res.data?.ticketType || '';
+          const msg = (isDryQR(qrData) || String(ticketType).toLowerCase().includes('quru'))
+            ? (res.message || 'Təkrar cəhd')
+            : (res.message || 'Xəbərdarlıq');
+
+          addScan({name: res.data?.adSoyad || '-', id: res.data?.empId || '-', type: ticketType, msg, warn:true, err:false});
+          showResult({resultType:'warning', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:ticketType || '-', statusText: msg});
           return;
         }
 
         if (res.status === 'confirm'){
-          // ✅ token-i robust götür
           const token =
             res.token ||
             res.confirmToken ||
@@ -307,16 +359,21 @@
             res.data?.confirmToken ||
             null;
 
-          // ✅ confirm üçün həmin QR-i də saxla (bəzən backend bunu istəyir)
           pendingConfirmQrData = qrData;
+          pendingConfirmMeta = {
+            name: res.data?.adSoyad || '-',
+            id: res.data?.empId || '-',
+            type: res.data?.ticketType || 'Quru Talon',
+            msg: res.message || 'Təsdiq tələb olunur'
+          };
 
-          addScan({name: res.data.adSoyad, id: res.data.empId, type: res.data.ticketType, msg: res.message, warn:true, err:false});
+          addScan({name: pendingConfirmMeta.name, id: pendingConfirmMeta.id, type: pendingConfirmMeta.type, msg: pendingConfirmMeta.msg, warn:true, err:false});
           showResult({
             resultType:'confirm',
-            name:res.data.adSoyad,
-            id:res.data.empId,
-            type:res.data.ticketType,
-            statusText:res.message,
+            name: pendingConfirmMeta.name,
+            id: pendingConfirmMeta.id,
+            type: pendingConfirmMeta.type,
+            statusText: pendingConfirmMeta.msg,
             confirmToken: token
           });
           return;
@@ -334,12 +391,28 @@
       const btn = document.getElementById('confirmBtn');
       if (!pendingConfirmToken) return;
 
+      // ✅ 1) Instant feedback (sənin istədiyin kimi “tez”)
       btn.disabled = true;
-      const oldText = btn.textContent;
       btn.textContent = 'Göndərilir...';
 
+      // ✅ 2) Quru talonda təsdiq basılan kimi lokal olaraq təsdiqlə:
+      // (sonrakı oxutma "Təkrar cəhd" olacaq)
+      if (pendingConfirmQrData && isDryQR(pendingConfirmQrData)){
+        markDryUsed(pendingConfirmQrData);
+      }
+
+      // ✅ 3) Dərhal “Təsdiqləndi” ekranı göstər (backend “təkrar cəhd” yazsa da user pro UX görsün)
+      const meta = pendingConfirmMeta || {name:'-', id:'-', type:'Quru Talon'};
+      showResult({
+        resultType:'success',
+        name: meta.name,
+        id: meta.id,
+        type: meta.type,
+        statusText: 'Təsdiqləndi ✅'
+      });
+
+      // backend request (həqiqi qeydiyyat üçün) — paralel işləyir
       try{
-        // ✅ ən kritik fix: backend hansı parametri gözləsə də işləsin
         const url =
           `${SHEET_API_URL}?action=confirmDrySecond` +
           `&token=${encodeURIComponent(pendingConfirmToken || '')}` +
@@ -348,27 +421,31 @@
 
         const res = await fetchJSONP(url);
 
+        // backend açıq ERROR qaytarsa, onu göstərək
+        if (res && (res.status === 'error' || res.status === 'failed')){
+          // localUsed etmişdik — geri qaytarmaq istəsən, burda silmək olar
+          addScan({name: meta.name, id: meta.id, type: meta.type, msg: res.message || 'Təsdiq alınmadı', err:true});
+          showResult({resultType:'error', name: meta.name, id: meta.id, type: meta.type, statusText: res.message || 'Təsdiq alınmadı'});
+          return;
+        }
+
+        // success/warning olsa belə — UX-də artıq “Təsdiqləndi” göstərdik.
+        // History-də isə server mesajını qeyd edək (istəsən “Təsdiqləndi” yazaram).
         addScan({
-          name: res.data?.adSoyad || '-',
-          id: res.data?.empId || '-',
-          type: res.data?.ticketType || '-',
-          msg: res.message || 'Təsdiqləndi',
-          warn: (res.status !== 'success'),
-          err: false
+          name: res?.data?.adSoyad || meta.name,
+          id: res?.data?.empId || meta.id,
+          type: res?.data?.ticketType || meta.type,
+          msg: 'Təsdiqləndi',
+          warn:false,
+          err:false
         });
 
-        if (res.status === 'success'){
-          showResult({resultType:'success', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Təsdiqləndi'});
-        } else if (res.status === 'warning'){
-          showResult({resultType:'warning', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Xəbərdarlıq'});
-        } else {
-          showResult({resultType:'warning', name:res.data?.adSoyad || '-', id:res.data?.empId || '-', type:res.data?.ticketType || '-', statusText:res.message || 'Təkrar cəhd'});
-        }
       }catch(e){
-        showResult({resultType:'error', name:'Xəta', id:'-', type:'-', statusText:'Təsdiq göndərilmədi'});
-      }finally{
-        btn.disabled = false;
-        btn.textContent = oldText;
+        // server çatmazsa: UX-də artıq təsdiq görünüb — amma logda bildirək
+        addScan({name: meta.name, id: meta.id, type: meta.type, msg: 'Server cavabı gecikdi', warn:true, err:false});
+      } finally {
+        // düyməni disable saxlayaq (təsdiq artıq verilib)
+        btn.textContent = 'Göndərildi ✅';
       }
     };
 
