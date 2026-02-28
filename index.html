@@ -42,6 +42,20 @@
 
     .last-scan{background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 15px rgba(0,0,0,.1)}
     .last-scan h2{font-size:1.1em;color:#333;margin-bottom:15px}
+
+    /* NEW: search */
+    .search-wrap{display:flex;gap:10px;margin-bottom:12px}
+    .search-input{
+      flex:1;
+      border:1px solid #e5e7eb;
+      background:#fafafa;
+      border-radius:14px;
+      padding:12px 14px;
+      font-weight:600;
+      outline:none;
+    }
+    .search-input:focus{border-color:#667eea;background:#fff}
+
     .scan-item{display:flex;align-items:center;padding:12px;border-bottom:1px solid #eee}
     .scan-item:last-child{border-bottom:none}
     .scan-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-right:12px;flex-shrink:0}
@@ -64,9 +78,15 @@
     </div>
 
     <div class="last-scan">
-      <h2>📋 Son skan edilənlər</h2>
+      <h2>📋 Son skan edilənlər (bu gün)</h2>
+
+      <!-- NEW: search -->
+      <div class="search-wrap">
+        <input id="searchInput" class="search-input" placeholder="Ad / ID ilə axtar..." autocomplete="off" />
+      </div>
+
       <div id="scanList">
-        <div style="text-align:center;color:#999;padding:20px;">Hələ heç bir skan edilməyib</div>
+        <div style="text-align:center;color:#999;padding:20px;">Yüklənir...</div>
       </div>
     </div>
   </div>
@@ -92,7 +112,7 @@
   </div>
 
   <script>
-    const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbyXggXnl25MLehHcXp5wSp59CmyOU93AVUfofgCyWBcwHnuOaLo_DgDo7j5aBeoS6qy/exec';
+    const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzQWdxKQ_8wKCMm5HYEaH0-BecbYXQ_eHeRb6RdtflC9HnOXGWVJY9ofo0JtqxTqkU_/exec';
 
     // neçə saniyəyə overlay bağlansın
     const COUNTDOWN_SECONDS = 5;
@@ -100,11 +120,7 @@
     // eyni QR ardıcıl oxunanda (kamera “titrəməsi”) filter
     const LAST_QR_COOLDOWN_MS = 900;
 
-    // QURU QAYDA (sənin dediyin):
-    // 1-ci scan -> normal scanTicket (sheetə düşür)
-    // 2-ci scan -> “Təsdiq et” düyməsi çıxır (hələ sheetə Təsdiq düşməyəcək)
-    // Düyməyə bas -> confirmDrySecond çağrılır və SHEET-ə "Təsdiq" düşməlidir
-    // 3-cü scan -> scanTicket yenə çağrılır və "Təkrar cəhd" (sheetə də düşür)
+    // QURU QAYDA
     const DRY_TTL_MS = 24 * 60 * 60 * 1000;
 
     let isProcessing = false;
@@ -124,11 +140,15 @@
     // quru sayğacı
     const dryCountMap = new Map(); // qrData -> {count, ts}
 
+    // NEW: daily reset + cache key
+    const DAY_KEY_STORAGE = 'ghg_scanner_day_key_v1';
+    const TODAY_SCANS_CACHE = 'ghg_today_scans_cache_v1'; // optional fallback/local cache
+    let activeDayKey = null;
+
     function isDryQR(qrData){
-      // format: GHG|empId|Q|dd.mm.yyyy|hash|dry
       const parts = String(qrData || '').split('|');
-      const code = parts[2];  // Q
-      const last = parts[5];  // dry
+      const code = parts[2];
+      const last = parts[5];
       return code === 'Q' || last === 'dry' || String(qrData).includes('|Q|') || String(qrData).includes('|dry');
     }
 
@@ -143,7 +163,6 @@
       dryCountMap.set(qrData, {count, ts: Date.now()});
     }
 
-    // ✅ JSONP daha stabil: timeout clear + cleanup
     function fetchJSONP(url, {timeoutMs=12000, retry=1} = {}) {
       return new Promise((resolve, reject) => {
         const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
@@ -181,7 +200,6 @@
 
         script.onerror = () => fail(new Error('Load error'));
 
-        // ✅ cache qırmaq üçün t parametri əlavə edirik
         const nonce = Date.now();
         script.src = url
           + (url.includes('?') ? '&' : '?')
@@ -198,13 +216,24 @@
       s.textContent = text;
     }
 
-    function addScan(item){
-      const time = new Date().toLocaleTimeString('az-AZ');
-      scanHistory.unshift({...item, time});
-      if (scanHistory.length > 10) scanHistory.pop();
-
+    // NEW: UI render with search filter
+    function renderScanList(){
       const list = document.getElementById('scanList');
-      list.innerHTML = scanHistory.map(scan=>{
+      const q = String(document.getElementById('searchInput').value || '').trim().toLowerCase();
+
+      const filtered = scanHistory.filter(scan => {
+        if (!q) return true;
+        const name = String(scan.name || '').toLowerCase();
+        const id = String(scan.id || '').toLowerCase();
+        return name.includes(q) || id.includes(q);
+      });
+
+      if (!filtered.length){
+        list.innerHTML = `<div style="text-align:center;color:#999;padding:20px;">Heç nə tapılmadı</div>`;
+        return;
+      }
+
+      list.innerHTML = filtered.map(scan=>{
         let icon='✓', cls='ok';
         if (scan.err) { icon='✕'; cls='err'; }
         else if (scan.warn) { icon='⚠'; cls='warn'; }
@@ -213,13 +242,23 @@
           <div class="scan-item">
             <div class="scan-icon ${cls}">${icon}</div>
             <div class="scan-info">
-              <div class="scan-name">${scan.name}</div>
-              <div class="scan-detail">${scan.id} ${scan.type ? '| ' + scan.type : ''} | ${scan.msg}</div>
-              <div class="scan-time">${scan.time}</div>
+              <div class="scan-name">${escapeHtml_(scan.name)}</div>
+              <div class="scan-detail">${escapeHtml_(scan.id)} ${scan.type ? '| ' + escapeHtml_(scan.type) : ''} | ${escapeHtml_(scan.msg)}</div>
+              <div class="scan-time">${escapeHtml_(scan.time || '')}</div>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    function addScan(item){
+      // item.time serverdən gəlibsə saxla, yoxdursa local time yaz
+      const time = item.time || new Date().toLocaleTimeString('az-AZ');
+      scanHistory.unshift({...item, time});
+      if (scanHistory.length > 200) scanHistory.pop(); // gün ərzində daha çox saxlayaq
+      // optional local cache
+      try { localStorage.setItem(TODAY_SCANS_CACHE, JSON.stringify(scanHistory)); } catch(e){}
+      renderScanList();
     }
 
     function startCountdown(){
@@ -246,8 +285,6 @@
     }
 
     function showResult({resultType, name, id, type, statusText, mode='auto', confirmToken=null}){
-      // mode: 'auto' (countdown) | 'confirm' (düyməli) | 'confirmInfo' (düyməsiz confirm info)
-
       document.getElementById('countdown').textContent = COUNTDOWN_SECONDS;
 
       const overlay = document.getElementById('resultOverlay');
@@ -267,7 +304,6 @@
 
       pendingConfirmToken = confirmToken || null;
 
-      // reset
       confirmBtn.style.display = 'none';
       confirmBtn.disabled = false;
       confirmBtn.textContent = '✅ Təsdiq et';
@@ -276,7 +312,6 @@
       closeBtn.style.opacity = '1';
       closeBtn.style.cursor = 'pointer';
 
-      // countdown default gizlət
       document.getElementById('countdown').style.display='none';
       document.getElementById('countdownText').style.display='none';
       if (countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
@@ -291,12 +326,7 @@
         if (mode === 'auto') startCountdown();
       } else if (resultType === 'confirm'){
         icon.textContent='?'; title.textContent='Təsdiqləndi';
-        if (mode === 'confirm') {
-          confirmBtn.style.display = 'block';
-        } else {
-          // confirmInfo: düyməsiz
-          confirmBtn.style.display = 'none';
-        }
+        if (mode === 'confirm') confirmBtn.style.display = 'block';
       } else {
         icon.textContent='✕'; title.textContent='Xəta';
         closeBtn.disabled = true; closeBtn.style.opacity = '.6'; closeBtn.style.cursor = 'not-allowed';
@@ -329,6 +359,76 @@
       return false;
     }
 
+    // NEW: serverdən bu günün skanlarını çək
+    async function loadTodayScansFromServer(){
+      try{
+        const res = await fetchJSONP(`${SHEET_API_URL}?action=getTodayScans`, { timeoutMs: 12000, retry: 1 });
+
+        // gözlənən format:
+        // { status:'success', date:'dd.MM.yyyy', items:[{time, empId, adSoyad, ticketType, statusText}] }
+        if (!res || res.status !== 'success') throw new Error(res?.message || 'Server cavabı error');
+
+        // day key update
+        activeDayKey = String(res.date || '').trim() || null;
+        if (activeDayKey) {
+          try { localStorage.setItem(DAY_KEY_STORAGE, activeDayKey); } catch(e){}
+        }
+
+        const items = Array.isArray(res.items) ? res.items : [];
+
+        scanHistory = items.map(it => {
+          const name = it.adSoyad || it.name || '-';
+          const id = it.empId || it.id || '-';
+          const type = it.ticketType || it.type || '-';
+          const msg = it.statusText || it.msg || '-';
+          const stLower = String(msg).toLowerCase();
+          const err = stLower.includes('xəta') || stLower.includes('error');
+          const warn = stLower.includes('təkrar') || stLower.includes('xəbərdarlıq') || stLower.includes('confirm') || stLower.includes('təsdiq tələb');
+          return { name, id, type, msg, time: it.time || '' , err, warn: (!err && warn) };
+        });
+
+        // optional local cache
+        try { localStorage.setItem(TODAY_SCANS_CACHE, JSON.stringify(scanHistory)); } catch(e){}
+
+        renderScanList();
+      } catch(e){
+        // fallback: local cache göstər (server yoxdur)
+        try{
+          const cached = JSON.parse(localStorage.getItem(TODAY_SCANS_CACHE) || '[]');
+          if (Array.isArray(cached) && cached.length){
+            scanHistory = cached;
+            renderScanList();
+            return;
+          }
+        }catch(_e){}
+        document.getElementById('scanList').innerHTML =
+          `<div style="text-align:center;color:#999;padding:20px;">Bu günün skanları yüklənmədi</div>`;
+      }
+    }
+
+    // NEW: gün dəyişibsə reset et
+    function checkAndResetIfDayChanged(){
+      try{
+        const saved = localStorage.getItem(DAY_KEY_STORAGE) || '';
+        if (activeDayKey && saved && activeDayKey !== saved){
+          // server day dəyişibsə
+          scanHistory = [];
+          localStorage.setItem(DAY_KEY_STORAGE, activeDayKey);
+          localStorage.removeItem(TODAY_SCANS_CACHE);
+          renderScanList();
+        }
+      }catch(e){}
+    }
+
+    function escapeHtml_(s){
+      return String(s ?? '')
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+    }
+
     async function handleScan(qrData){
       if (shouldDropDuplicate(qrData)) return;
       if (isProcessing) return;
@@ -337,7 +437,7 @@
       updateStatus('scanning','Yoxlanılır...');
 
       try{
-        // ✅ HƏR scan serverə gedir -> sheetə düşür
+        // HƏR scan serverə gedir -> sheetə düşür
         const res = await fetchJSONP(
           `${SHEET_API_URL}?action=scanTicket&qrData=${encodeURIComponent(qrData)}`,
           { timeoutMs: 12000, retry: 1 }
@@ -348,11 +448,10 @@
         const ticketType = res.data?.ticketType || (isDryQR(qrData) ? 'Quru Talon' : '-');
         const isDry = isDryQR(qrData) || String(ticketType).toLowerCase().includes('quru');
 
-        // ✅ QURU LOGİKA
+        // QURU LOGİKA
         if (isDry){
           const c = getDryCount(qrData);
 
-          // 3-cü və sonrası -> Təkrar cəhd (sheetə də scanTicket ilə düşür)
           if (c >= 2){
             updateStatus('warning','Təkrar cəhd');
             addScan({name, id, type:'Quru Talon', msg:'Təkrar cəhd', warn:true, err:false});
@@ -360,9 +459,7 @@
             return;
           }
 
-          // 2-ci scan -> confirm düyməli ekran (sheetə Təsdiq yalnız düymə basanda düşəcək)
           if (c === 1){
-            // token haradan gəlirsə hamısını yoxlayırıq
             const token =
               res.token ||
               res.confirmToken ||
@@ -388,15 +485,18 @@
             return;
           }
 
-          // 1-ci scan -> normal göstər, sonra count=1 et
           setDryCount(qrData, 1);
         }
 
-        // ✅ NORMAL AXIN (və quru 1-ci scan)
+        // NORMAL AXIN (və quru 1-ci scan)
         if (res.status === 'success'){
           updateStatus('success', res.message || 'Təsdiqləndi');
           addScan({name, id, type: ticketType, msg: res.message || 'Təsdiqləndi', warn:false, err:false});
           showResult({resultType:'success', name, id, type: ticketType, statusText: res.message || 'Təsdiqləndi', mode:'auto'});
+
+          // NEW: server listini yüngül yenilə (istəsən söndürərik)
+          // await loadTodayScansFromServer();
+
           return;
         }
 
@@ -408,7 +508,6 @@
         }
 
         if (res.status === 'confirm'){
-          // digər talonlar üçün backend confirm
           const token =
             res.token ||
             res.confirmToken ||
@@ -442,7 +541,6 @@
       }
     }
 
-    // ✅ 2-ci quru scan -> "Təsdiq et" düyməsi
     document.getElementById('confirmBtn').onclick = async () => {
       const btn = document.getElementById('confirmBtn');
       if (!pendingConfirmQrData) return;
@@ -455,8 +553,6 @@
       const token = pendingConfirmToken || '';
 
       try{
-        // ✅ IMPORTANT: cache olmasın deyə t=... əlavə edirik
-        // ✅ IMPORTANT: bəzən backend tokeni "confirmToken" gözləyir, ona görə ikisini də göndəririk
         const url =
           `${SHEET_API_URL}?action=confirmDrySecond` +
           `&token=${encodeURIComponent(token)}` +
@@ -465,8 +561,6 @@
 
         const res = await fetchJSONP(url, { timeoutMs: 12000, retry: 1 });
 
-        // ✅ burada sheetə düşməsinin yeganə yolu: backend confirmDrySecond içində yazmalıdır
-        // biz user-ə düzgün mesaj göstərəcəyik, amma server error verirsə də göstərəcəyik
         if (res && (res.status === 'error' || res.status === 'failed')){
           updateStatus('error', res.message || 'Təsdiq alınmadı');
           addScan({name: meta.name, id: meta.id, type: meta.type, msg: res.message || 'Təsdiq alınmadı', err:true});
@@ -474,7 +568,6 @@
           return;
         }
 
-        // ✅ 2-ci scan təsdiqləndi -> count=2 (3-cü scan “Təkrar cəhd”)
         setDryCount(qrData, 2);
 
         updateStatus('success','Təsdiq');
@@ -528,7 +621,33 @@
       });
     }
 
-    window.onload = startCamera;
+    // NEW: search listener
+    document.getElementById('searchInput').addEventListener('input', () => renderScanList());
+
+    window.onload = async () => {
+      // 1) bu günün skanlarını cədvəldən yüklə
+      await loadTodayScansFromServer();
+
+      // 2) kamera başlasın
+      startCamera();
+
+      // 3) periodik gün yoxlaması (gün dəyişəndə sıfırlansın + yenidən serverdən çəksin)
+      setInterval(async ()=>{
+        // serverdən gün key-i təzələyək (gün dəyişməsini dəqiq tutmaq üçün)
+        const prev = activeDayKey;
+        await loadTodayScansFromServer();
+        if (prev && activeDayKey && prev !== activeDayKey){
+          // yeni gün başladı
+          scanHistory = [];
+          try { localStorage.removeItem(TODAY_SCANS_CACHE); } catch(e){}
+          renderScanList();
+          // yenidən bu günün dataları (boş ola bilər)
+          await loadTodayScansFromServer();
+        }
+        checkAndResetIfDayChanged();
+      }, 60 * 1000);
+    };
+
     window.onbeforeunload = ()=>{
       try{ if (html5QrCode) html5QrCode.stop(); }catch(e){}
       if (countdownInterval) clearInterval(countdownInterval);
