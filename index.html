@@ -1,343 +1,538 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="az">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GHG Talon - Skan</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GHG Yemək Skaner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
-    :root{
-      --bg:#0b1220;
-      --card:#111a2e;
-      --muted:#8ea0c6;
-      --text:#eaf0ff;
-      --ok:#22c55e;
-      --warn:#f59e0b;
-      --err:#ef4444;
-      --line:#223055;
-      --btn:#2563eb;
-      --btn2:#334155;
-      --input:#0f1b33;
-    }
-    body{
-      margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: linear-gradient(180deg, #070b14, var(--bg));
-      color:var(--text);
-    }
-    .wrap{max-width:1100px;margin:0 auto;padding:18px;}
-    .grid{display:grid;grid-template-columns: 1.1fr 0.9fr;gap:16px;}
-    @media (max-width: 900px){ .grid{grid-template-columns:1fr;} }
-    .card{
-      background: rgba(17,26,46,0.85);
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:14px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-      backdrop-filter: blur(6px);
-    }
-    h1{font-size:18px;margin:0 0 10px;}
-    h2{font-size:14px;margin:0 0 10px;color:#cfe0ff}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .muted{color:var(--muted);font-size:12px}
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      border:1px solid var(--line);border-radius:999px;
-      padding:6px 10px;background: rgba(15,27,51,0.6);
-      font-size:12px;color:#dce7ff;
-    }
-    .btn{
-      border:0;border-radius:10px;
-      padding:10px 12px;
-      cursor:pointer;
-      color:white;background:var(--btn);
-      font-weight:600;
-    }
-    .btn.secondary{background:var(--btn2)}
-    .input{
-      background: rgba(15,27,51,0.9);
-      border:1px solid var(--line);
-      color:var(--text);
-      border-radius:10px;
-      padding:10px 12px;
-      outline:none;
-      width:100%;
-      box-sizing:border-box;
-    }
-    .statusBox{
-      border:1px dashed var(--line);
-      border-radius:12px;
-      padding:12px;
-      background: rgba(15,27,51,0.45);
-    }
-    .statusText{font-size:14px;font-weight:700;margin:0 0 6px;}
-    .statusText.ok{color:var(--ok)}
-    .statusText.warn{color:var(--warn)}
-    .statusText.err{color:var(--err)}
-    .tableWrap{overflow:auto;border:1px solid var(--line);border-radius:12px}
-    table{width:100%;border-collapse:collapse;min-width:720px}
-    th,td{padding:10px 10px;border-bottom:1px solid rgba(34,48,85,0.6);font-size:13px}
-    th{position:sticky;top:0;background:#0f1b33;color:#dbe6ff;text-align:left;z-index:1}
-    tr:hover td{background: rgba(37,99,235,0.07)}
-    .tag{
-      font-size:12px;
-      padding:4px 8px;border-radius:999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,0.04);
-      white-space:nowrap;
-    }
-    .tag.ok{border-color:rgba(34,197,94,0.45); color:#bff3cf}
-    .tag.warn{border-color:rgba(245,158,11,0.5); color:#ffe3b0}
-    .tag.err{border-color:rgba(239,68,68,0.45); color:#ffc3c3}
-    .small{font-size:12px}
-    .split{display:grid;grid-template-columns: 1fr 1fr; gap:10px}
-    @media (max-width: 520px){ .split{grid-template-columns:1fr;} }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;min-height:100vh}
+    .header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:15px;text-align:center}
+    .header h1{font-size:1.3em}
+    .container{max-width:600px;margin:0 auto;padding:15px}
+    .scanner-box{background:#fff;border-radius:20px;padding:15px;margin-bottom:15px;box-shadow:0 4px 15px rgba(0,0,0,.1)}
+    #reader{width:100%;border-radius:16px;overflow:hidden}
+    .status{text-align:center;padding:12px;margin-top:10px;border-radius:12px;font-weight:600;font-size:.95em}
+    .status-waiting{background:#fff3e0;color:#e65100}
+    .status-scanning{background:#e3f2fd;color:#1565c0}
+    .status-success{background:#e8f5e9;color:#2e7d32}
+    .status-warning{background:#fff3e0;color:#f57c00}
+    .status-error{background:#ffebee;color:#c62828}
+
+    .result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;justify-content:center;align-items:center;padding:20px}
+    .result-card{background:#fff;border-radius:24px;padding:26px;width:100%;max-width:420px;text-align:center}
+    .result-icon{width:90px;height:90px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:46px}
+    .result-success .result-icon{background:#e8f5e9;color:#4caf50}
+    .result-warning .result-icon{background:#fff3e0;color:#ff9800}
+    .result-error .result-icon{background:#ffebee;color:#f44336}
+    .result-title{font-size:1.3em;font-weight:800;margin-bottom:14px}
+    .result-details{background:#f5f5f5;border-radius:16px;padding:16px;margin-bottom:14px;text-align:left}
+    .detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e0e0e0}
+    .detail-row:last-child{border-bottom:none}
+    .detail-label{color:#666;font-size:.9em}
+    .detail-value{color:#333;font-weight:700;font-size:.95em}
+
+    .btn{border:none;border-radius:14px;padding:12px 14px;font-weight:800;cursor:pointer;width:100%}
+    .btn-confirm{background:#4caf50;color:#fff;margin-top:10px}
+    .btn-close{background:#e0e0e0;color:#111;margin-top:10px}
+
+    .countdown{font-size:2.2em;font-weight:800;color:#667eea;margin-top:10px}
+    .countdown-text{color:#999;font-size:.9em;margin-top:5px}
+
+    .last-scan{background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 15px rgba(0,0,0,.1)}
+    .last-scan h2{font-size:1.1em;color:#333;margin-bottom:15px}
+    .scan-item{display:flex;align-items:center;padding:12px;border-bottom:1px solid #eee}
+    .scan-item:last-child{border-bottom:none}
+    .scan-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-right:12px;flex-shrink:0}
+    .scan-icon.ok{background:#e8f5e9;color:#4caf50}
+    .scan-icon.warn{background:#fff3e0;color:#ff9800}
+    .scan-icon.err{background:#ffebee;color:#f44336}
+    .scan-info{flex:1;min-width:0}
+    .scan-name{font-weight:700;color:#333;font-size:.95em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .scan-detail{color:#666;font-size:.8em;margin-top:2px}
+    .scan-time{color:#999;font-size:.75em;margin-top:2px}
   </style>
 </head>
-
 <body>
-  <div class="wrap">
-    <div class="row" style="justify-content:space-between;margin-bottom:12px;">
-      <div>
-        <h1>GHG Elektron Talon — Skan Paneli</h1>
-        <div class="muted">Bugünkü skanlar avtomatik göstərilir və hər gün “0”dan başlayır (yalnız bugünkü tarix filtr olunur).</div>
-      </div>
-      <div class="row">
-        <span class="pill"><span class="muted">Tarix:</span> <b id="todayLabel">-</b></span>
-        <span class="pill"><span class="muted">Cəm skan:</span> <b id="totalLabel">0</b></span>
-      </div>
+  <div class="header"><h1>🍽️ GHG Yemək Skaner</h1></div>
+
+  <div class="container">
+    <div class="scanner-box">
+      <div id="reader"></div>
+      <div class="status status-waiting" id="status">QR kod gözlənilir...</div>
     </div>
 
-    <div class="grid">
-      <!-- LEFT: Scan -->
-      <div class="card">
-        <h2>Skan</h2>
-
-        <div class="split">
-          <div>
-            <label class="muted">QR Data (test üçün əl ilə də daxil edə bilərsiniz)</label>
-            <input id="qrInput" class="input" placeholder="GHG|123|G|28.02.2026|HASH|lunch" />
-          </div>
-          <div>
-            <label class="muted">Axtarış (Ad / ID)</label>
-            <input id="searchInput" class="input" placeholder="Məs: Elvin / 1023" />
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <button class="btn" id="btnScan">Skan et</button>
-          <button class="btn secondary" id="btnRefresh">Yenilə</button>
-          <span class="muted small" id="hintApi">API: <span id="apiBase">Script URL tələb olunur</span></span>
-        </div>
-
-        <div style="margin-top:12px;" class="statusBox">
-          <div id="statusText" class="statusText">Hazırdır</div>
-          <div class="muted" id="statusDetail">Skan etdikcə aşağıdakı cədvəl bugünkü skanlara görə yenilənəcək.</div>
-
-          <div id="confirmBox" style="display:none;margin-top:10px;">
-            <div class="muted" style="margin-bottom:8px;">Quru talon 2-ci mərhələ təsdiqi tələb olunur.</div>
-            <button class="btn" id="btnConfirmDry">Təsdiqlə</button>
-            <button class="btn secondary" id="btnCancelConfirm">Ləğv et</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- RIGHT: Today list -->
-      <div class="card">
-        <h2>Bugünkü skanlar</h2>
-        <div class="muted" style="margin-bottom:10px;">
-          Axtarış aktivdir. Siyahı yalnız <b>bugünkü tarix</b> üçün göstərilir.
-        </div>
-
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th style="width:88px;">Saat</th>
-                <th style="width:90px;">ID</th>
-                <th>Ad Soyad</th>
-                <th style="width:140px;">Talon</th>
-                <th style="width:130px;">Status</th>
-              </tr>
-            </thead>
-            <tbody id="tbody">
-              <tr><td colspan="5" class="muted">Məlumat yoxdur</td></tr>
-            </tbody>
-          </table>
-        </div>
+    <div class="last-scan">
+      <h2>📋 Son skan edilənlər</h2>
+      <div id="scanList">
+        <div style="text-align:center;color:#999;padding:20px;">Hələ heç bir skan edilməyib</div>
       </div>
     </div>
   </div>
 
-<script>
-/**
- * Vacib: Buraya Apps Script Web App URL-ni yazın.
- * Məsələn:
- * const SCRIPT_URL = "https://script.google.com/macros/s/AKfycb.../exec";
- */
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyXggXnl25MLehHcXp5wSp59CmyOU93AVUfofgCyWBcwHnuOaLo_DgDo7j5aBeoS6qy/exec"; // <-- bunu doldurun
+  <div class="result-overlay" id="resultOverlay">
+    <div class="result-card" id="resultCard">
+      <div class="result-icon" id="resultIcon">✓</div>
+      <div class="result-title" id="resultTitle">Təsdiqləndi</div>
 
-let pendingDryToken = null;
+      <div class="result-details">
+        <div class="detail-row"><span class="detail-label">Əməkdaş:</span><span class="detail-value" id="detailName">-</span></div>
+        <div class="detail-row"><span class="detail-label">ID:</span><span class="detail-value" id="detailId">-</span></div>
+        <div class="detail-row"><span class="detail-label">Talon:</span><span class="detail-value" id="detailTicket">-</span></div>
+        <div class="detail-row"><span class="detail-label">Status:</span><span class="detail-value" id="detailStatus">-</span></div>
+      </div>
 
-function setStatus(type, title, detail){
-  const el = document.getElementById('statusText');
-  const det = document.getElementById('statusDetail');
-  el.className = "statusText " + (type || "");
-  el.textContent = title || "";
-  det.textContent = detail || "";
-}
+      <button class="btn btn-confirm" id="confirmBtn" style="display:none;">✅ Təsdiq et</button>
+      <button class="btn btn-close" id="closeBtn">Bağla</button>
 
-function statusTagClass(statusText){
-  const s = (statusText || "").toLowerCase();
-  if (s.includes("təsdiqləndi")) return "ok";
-  if (s.includes("təkrar")) return "warn";
-  if (s.includes("xəta")) return "err";
-  if (s.includes("təsdiq")) return "warn";
-  return "";
-}
+      <div class="countdown" id="countdown" style="display:none;">5</div>
+      <div class="countdown-text" id="countdownText" style="display:none;">saniyə sonra skanerə qayıdılır</div>
+    </div>
+  </div>
 
-function buildUrl(params){
-  const u = new URL(SCRIPT_URL);
-  Object.keys(params).forEach(k => u.searchParams.set(k, params[k]));
-  return u.toString();
-}
+  <script>
+    const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbyXggXnl25MLehHcXp5wSp59CmyOU93AVUfofgCyWBcwHnuOaLo_DgDo7j5aBeoS6qy/exec';
 
-async function apiGet(params){
-  if (!SCRIPT_URL){
-    throw new Error("SCRIPT_URL boşdur. Skan.html daxilində Apps Script Web App URL-ni yazın.");
-  }
-  const res = await fetch(buildUrl(params), { method: "GET", cache: "no-store" });
-  return await res.json();
-}
+    // neçə saniyəyə overlay bağlansın
+    const COUNTDOWN_SECONDS = 5;
 
-function renderTable(items){
-  const tbody = document.getElementById("tbody");
-  tbody.innerHTML = "";
+    // eyni QR ardıcıl oxunanda (kamera “titrəməsi”) filter
+    const LAST_QR_COOLDOWN_MS = 900;
 
-  if (!items || !items.length){
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="5" class="muted">Məlumat yoxdur</td>`;
-    tbody.appendChild(tr);
-    return;
-  }
+    // QURU QAYDA (sənin dediyin):
+    // 1-ci scan -> normal scanTicket (sheetə düşür)
+    // 2-ci scan -> “Təsdiq et” düyməsi çıxır (hələ sheetə Təsdiq düşməyəcək)
+    // Düyməyə bas -> confirmDrySecond çağrılır və SHEET-ə "Təsdiq" düşməlidir
+    // 3-cü scan -> scanTicket yenə çağrılır və "Təkrar cəhd" (sheetə də düşür)
+    const DRY_TTL_MS = 24 * 60 * 60 * 1000;
 
-  for (const it of items){
-    const tr = document.createElement("tr");
-    const cls = statusTagClass(it.statusText);
-    tr.innerHTML = `
-      <td>${escapeHtml(it.time || "")}</td>
-      <td>${escapeHtml(it.empId || "")}</td>
-      <td>${escapeHtml(it.fullName || "")}</td>
-      <td>${escapeHtml(it.ticketName || "")}</td>
-      <td><span class="tag ${cls}">${escapeHtml(it.statusText || "")}</span></td>
-    `;
-    tbody.appendChild(tr);
-  }
-}
+    let isProcessing = false;
+    let scanHistory = [];
+    let html5QrCode = null;
+    let countdownInterval = null;
 
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
+    // confirm state
+    let pendingConfirmToken = null;
+    let pendingConfirmQrData = null;
+    let pendingConfirmMeta = null;
 
-async function refreshTodayScans(){
-  const q = document.getElementById("searchInput").value.trim();
-  const data = await apiGet({ action: "getTodayScans", q });
+    // dedup
+    let lastQrText = '';
+    let lastQrAt = 0;
 
-  if (data.status !== "success"){
-    setStatus("err", "Xəta", data.message || "Bugünkü skanlar oxunmadı");
-    return;
-  }
+    // quru sayğacı
+    const dryCountMap = new Map(); // qrData -> {count, ts}
 
-  document.getElementById("todayLabel").textContent = data.date || "-";
-  document.getElementById("totalLabel").textContent = String(data.total ?? 0);
-  renderTable(data.items || []);
-}
+    function isDryQR(qrData){
+      // format: GHG|empId|Q|dd.mm.yyyy|hash|dry
+      const parts = String(qrData || '').split('|');
+      const code = parts[2];  // Q
+      const last = parts[5];  // dry
+      return code === 'Q' || last === 'dry' || String(qrData).includes('|Q|') || String(qrData).includes('|dry');
+    }
 
-async function scanNow(){
-  const qrData = document.getElementById("qrInput").value.trim();
-  if (!qrData){
-    setStatus("warn", "Diqqət", "qrData boşdur");
-    return;
-  }
+    function getDryCount(qrData){
+      const row = dryCountMap.get(qrData);
+      if (!row) return 0;
+      if (Date.now() - row.ts > DRY_TTL_MS){ dryCountMap.delete(qrData); return 0; }
+      return row.count || 0;
+    }
+    function setDryCount(qrData, count){
+      if (!qrData) return;
+      dryCountMap.set(qrData, {count, ts: Date.now()});
+    }
 
-  setStatus("", "Yoxlanılır...", "Zəhmət olmasa gözləyin");
-  pendingDryToken = null;
-  document.getElementById("confirmBox").style.display = "none";
+    // ✅ JSONP daha stabil: timeout clear + cleanup
+    function fetchJSONP(url, {timeoutMs=12000, retry=1} = {}) {
+      return new Promise((resolve, reject) => {
+        const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+        const script = document.createElement('script');
+        script.async = true;
 
-  const data = await apiGet({ action: "scanTicket", qrData });
+        let timer = null;
+        let finished = false;
 
-  // nəticəni göstər
-  if (data.status === "success"){
-    setStatus("ok", data.message || "Təsdiqləndi", `${data.data?.adSoyad || ""} — ${data.data?.ticketType || ""}`);
-  } else if (data.status === "warning"){
-    setStatus("warn", data.message || "Xəbərdarlıq", `${data.data?.adSoyad || ""} — ${data.data?.ticketType || ""}`);
-  } else if (data.status === "confirm"){
-    pendingDryToken = data.token;
-    setStatus("warn", data.message || "Təsdiq tələb olunur", `${data.data?.adSoyad || ""} — ${data.data?.ticketType || ""}`);
-    document.getElementById("confirmBox").style.display = "block";
-  } else {
-    setStatus("err", "Xəta", data.message || "Skan zamanı xəta");
-  }
+        function cleanup(){
+          if (timer) clearTimeout(timer);
+          timer = null;
+          try{ if (window[cb]) delete window[cb]; }catch(e){}
+          try{ if (script && script.parentNode) script.parentNode.removeChild(script); }catch(e){}
+        }
 
-  // hər skandan sonra bugünkü list yenilə
-  await refreshTodayScans();
-}
+        function fail(err){
+          if (finished) return;
+          finished = true;
+          cleanup();
+          if (retry > 0) {
+            return resolve(fetchJSONP(url, {timeoutMs, retry: retry-1}));
+          }
+          reject(err);
+        }
 
-async function confirmDry(){
-  if (!pendingDryToken){
-    setStatus("warn", "Diqqət", "Təsdiq tokeni yoxdur");
-    return;
-  }
-  setStatus("", "Təsdiqlənir...", "Zəhmət olmasa gözləyin");
+        window[cb] = (data) => {
+          if (finished) return;
+          finished = true;
+          cleanup();
+          resolve(data);
+        };
 
-  const data = await apiGet({ action: "confirmDrySecond", token: pendingDryToken });
+        timer = setTimeout(() => fail(new Error('Timeout')), timeoutMs);
 
-  if (data.status === "success"){
-    setStatus("ok", data.message || "Təsdiqləndi", `${data.data?.adSoyad || ""} — ${data.data?.ticketType || ""}`);
-  } else if (data.status === "warning"){
-    setStatus("warn", data.message || "Xəbərdarlıq", `${data.data?.adSoyad || ""} — ${data.data?.ticketType || ""}`);
-  } else {
-    setStatus("err", "Xəta", data.message || "Təsdiq zamanı xəta");
-  }
+        script.onerror = () => fail(new Error('Load error'));
 
-  pendingDryToken = null;
-  document.getElementById("confirmBox").style.display = "none";
-  await refreshTodayScans();
-}
+        // ✅ cache qırmaq üçün t parametri əlavə edirik
+        const nonce = Date.now();
+        script.src = url
+          + (url.includes('?') ? '&' : '?')
+          + 'callback=' + cb
+          + '&t=' + nonce;
 
-function wire(){
-  document.getElementById("apiBase").textContent = SCRIPT_URL ? "OK" : "SCRIPT_URL boşdur";
-  document.getElementById("btnScan").addEventListener("click", scanNow);
-  document.getElementById("btnRefresh").addEventListener("click", refreshTodayScans);
+        document.head.appendChild(script);
+      });
+    }
 
-  document.getElementById("btnConfirmDry").addEventListener("click", confirmDry);
-  document.getElementById("btnCancelConfirm").addEventListener("click", () => {
-    pendingDryToken = null;
-    document.getElementById("confirmBox").style.display = "none";
-    setStatus("", "Ləğv edildi", "Quru talon təsdiqi ləğv olundu");
-  });
+    function updateStatus(type, text){
+      const s = document.getElementById('status');
+      s.className = 'status status-' + type;
+      s.textContent = text;
+    }
 
-  // search yazdıqca auto filter (debounce)
-  let t = null;
-  document.getElementById("searchInput").addEventListener("input", () => {
-    if (t) clearTimeout(t);
-    t = setTimeout(() => refreshTodayScans().catch(err => setStatus("err","Xəta",err.message)), 250);
-  });
+    function addScan(item){
+      const time = new Date().toLocaleTimeString('az-AZ');
+      scanHistory.unshift({...item, time});
+      if (scanHistory.length > 10) scanHistory.pop();
 
-  // ilk açılışda siyahını çək
-  refreshTodayScans().catch(err => setStatus("err","Xəta",err.message));
+      const list = document.getElementById('scanList');
+      list.innerHTML = scanHistory.map(scan=>{
+        let icon='✓', cls='ok';
+        if (scan.err) { icon='✕'; cls='err'; }
+        else if (scan.warn) { icon='⚠'; cls='warn'; }
 
-  // istəsəniz: hər 10 saniyədən bir avtomatik yenilə
-  setInterval(() => {
-    refreshTodayScans().catch(()=>{});
-  }, 10000);
-}
+        return `
+          <div class="scan-item">
+            <div class="scan-icon ${cls}">${icon}</div>
+            <div class="scan-info">
+              <div class="scan-name">${scan.name}</div>
+              <div class="scan-detail">${scan.id} ${scan.type ? '| ' + scan.type : ''} | ${scan.msg}</div>
+              <div class="scan-time">${scan.time}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
-wire();
-</script>
+    function startCountdown(){
+      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+
+      const countdownEl = document.getElementById('countdown');
+      const countdownText = document.getElementById('countdownText');
+
+      countdownEl.style.display = 'block';
+      countdownText.style.display = 'block';
+
+      let seconds = COUNTDOWN_SECONDS;
+      countdownEl.textContent = seconds;
+
+      countdownInterval = setInterval(()=>{
+        seconds--;
+        countdownEl.textContent = seconds;
+        if (seconds <= 0){
+          clearInterval(countdownInterval);
+          countdownInterval = null;
+          hideResult();
+        }
+      }, 1000);
+    }
+
+    function showResult({resultType, name, id, type, statusText, mode='auto', confirmToken=null}){
+      // mode: 'auto' (countdown) | 'confirm' (düyməli) | 'confirmInfo' (düyməsiz confirm info)
+
+      document.getElementById('countdown').textContent = COUNTDOWN_SECONDS;
+
+      const overlay = document.getElementById('resultOverlay');
+      const card = document.getElementById('resultCard');
+      const icon = document.getElementById('resultIcon');
+      const title = document.getElementById('resultTitle');
+
+      document.getElementById('detailName').textContent = name || '-';
+      document.getElementById('detailId').textContent = id || '-';
+      document.getElementById('detailTicket').textContent = type || '-';
+      document.getElementById('detailStatus').textContent = statusText || '-';
+
+      card.className = 'result-card result-' + resultType;
+
+      const confirmBtn = document.getElementById('confirmBtn');
+      const closeBtn = document.getElementById('closeBtn');
+
+      pendingConfirmToken = confirmToken || null;
+
+      // reset
+      confirmBtn.style.display = 'none';
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '✅ Təsdiq et';
+
+      closeBtn.disabled = false;
+      closeBtn.style.opacity = '1';
+      closeBtn.style.cursor = 'pointer';
+
+      // countdown default gizlət
+      document.getElementById('countdown').style.display='none';
+      document.getElementById('countdownText').style.display='none';
+      if (countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+
+      if (resultType === 'success'){
+        icon.textContent='✓'; title.textContent='Təsdiqləndi';
+        closeBtn.disabled = true; closeBtn.style.opacity = '.6'; closeBtn.style.cursor = 'not-allowed';
+        if (mode === 'auto') startCountdown();
+      } else if (resultType === 'warning'){
+        icon.textContent='⚠'; title.textContent='Xəbərdarlıq';
+        closeBtn.disabled = true; closeBtn.style.opacity = '.6'; closeBtn.style.cursor = 'not-allowed';
+        if (mode === 'auto') startCountdown();
+      } else if (resultType === 'confirm'){
+        icon.textContent='?'; title.textContent='Təsdiqləndi';
+        if (mode === 'confirm') {
+          confirmBtn.style.display = 'block';
+        } else {
+          // confirmInfo: düyməsiz
+          confirmBtn.style.display = 'none';
+        }
+      } else {
+        icon.textContent='✕'; title.textContent='Xəta';
+        closeBtn.disabled = true; closeBtn.style.opacity = '.6'; closeBtn.style.cursor = 'not-allowed';
+        if (mode === 'auto') startCountdown();
+      }
+
+      overlay.style.display='flex';
+    }
+
+    function hideResult(){
+      document.getElementById('resultOverlay').style.display='none';
+      isProcessing = false;
+
+      pendingConfirmToken = null;
+      pendingConfirmQrData = null;
+      pendingConfirmMeta = null;
+
+      document.getElementById('countdown').style.display='none';
+      document.getElementById('countdownText').style.display='none';
+      if (countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+
+      updateStatus('waiting','QR kod gözlənilir...');
+    }
+
+    function shouldDropDuplicate(qrText){
+      const now = Date.now();
+      if (qrText === lastQrText && (now - lastQrAt) < LAST_QR_COOLDOWN_MS) return true;
+      lastQrText = qrText;
+      lastQrAt = now;
+      return false;
+    }
+
+    async function handleScan(qrData){
+      if (shouldDropDuplicate(qrData)) return;
+      if (isProcessing) return;
+      isProcessing = true;
+
+      updateStatus('scanning','Yoxlanılır...');
+
+      try{
+        // ✅ HƏR scan serverə gedir -> sheetə düşür
+        const res = await fetchJSONP(
+          `${SHEET_API_URL}?action=scanTicket&qrData=${encodeURIComponent(qrData)}`,
+          { timeoutMs: 12000, retry: 1 }
+        );
+
+        const name = res.data?.adSoyad || '-';
+        const id = res.data?.empId || '-';
+        const ticketType = res.data?.ticketType || (isDryQR(qrData) ? 'Quru Talon' : '-');
+        const isDry = isDryQR(qrData) || String(ticketType).toLowerCase().includes('quru');
+
+        // ✅ QURU LOGİKA
+        if (isDry){
+          const c = getDryCount(qrData);
+
+          // 3-cü və sonrası -> Təkrar cəhd (sheetə də scanTicket ilə düşür)
+          if (c >= 2){
+            updateStatus('warning','Təkrar cəhd');
+            addScan({name, id, type:'Quru Talon', msg:'Təkrar cəhd', warn:true, err:false});
+            showResult({resultType:'warning', name, id, type:'Quru Talon', statusText:'Təkrar cəhd', mode:'auto'});
+            return;
+          }
+
+          // 2-ci scan -> confirm düyməli ekran (sheetə Təsdiq yalnız düymə basanda düşəcək)
+          if (c === 1){
+            // token haradan gəlirsə hamısını yoxlayırıq
+            const token =
+              res.token ||
+              res.confirmToken ||
+              res.data?.token ||
+              res.data?.confirmToken ||
+              null;
+
+            pendingConfirmQrData = qrData;
+            pendingConfirmMeta = { name, id, type:'Quru Talon' };
+            pendingConfirmToken = token;
+
+            updateStatus('warning','Təsdiq');
+            addScan({name, id, type:'Quru Talon', msg:'Təsdiq et (2-ci scan)', warn:true, err:false});
+
+            showResult({
+              resultType:'confirm',
+              name, id,
+              type:'Quru Talon',
+              statusText:'✅ Təsdiq et düyməsinə basın',
+              mode:'confirm',
+              confirmToken: token
+            });
+            return;
+          }
+
+          // 1-ci scan -> normal göstər, sonra count=1 et
+          setDryCount(qrData, 1);
+        }
+
+        // ✅ NORMAL AXIN (və quru 1-ci scan)
+        if (res.status === 'success'){
+          updateStatus('success', res.message || 'Təsdiqləndi');
+          addScan({name, id, type: ticketType, msg: res.message || 'Təsdiqləndi', warn:false, err:false});
+          showResult({resultType:'success', name, id, type: ticketType, statusText: res.message || 'Təsdiqləndi', mode:'auto'});
+          return;
+        }
+
+        if (res.status === 'warning'){
+          updateStatus('warning', res.message || 'Xəbərdarlıq');
+          addScan({name, id, type: ticketType, msg: res.message || 'Xəbərdarlıq', warn:true, err:false});
+          showResult({resultType:'warning', name, id, type: ticketType, statusText: res.message || 'Xəbərdarlıq', mode:'auto'});
+          return;
+        }
+
+        if (res.status === 'confirm'){
+          // digər talonlar üçün backend confirm
+          const token =
+            res.token ||
+            res.confirmToken ||
+            res.data?.token ||
+            res.data?.confirmToken ||
+            null;
+
+          pendingConfirmQrData = qrData;
+          pendingConfirmMeta = { name, id, type: ticketType };
+          pendingConfirmToken = token;
+
+          addScan({name, id, type: ticketType, msg: res.message || 'Təsdiq tələb olunur', warn:true, err:false});
+          showResult({
+            resultType:'confirm',
+            name, id, type: ticketType,
+            statusText: res.message || 'Təsdiq tələb olunur',
+            mode:'confirm',
+            confirmToken: token
+          });
+          return;
+        }
+
+        updateStatus('error', res.message || 'Xəta');
+        addScan({name:'Xəta', id:'-', type:'-', msg: res.message || 'Xəta', err:true});
+        showResult({resultType:'error', name:'Xəta', id:'-', type:'-', statusText: res.message || 'Xəta', mode:'auto'});
+
+      }catch(e){
+        updateStatus('error','Serverə qoşulmadı');
+        addScan({name:'Bağlantı xətası', id:'-', type:'-', msg:'Serverə qoşulmadı', err:true});
+        showResult({resultType:'error', name:'Bağlantı xətası', id:'-', type:'-', statusText:'Serverə qoşulmadı', mode:'auto'});
+      }
+    }
+
+    // ✅ 2-ci quru scan -> "Təsdiq et" düyməsi
+    document.getElementById('confirmBtn').onclick = async () => {
+      const btn = document.getElementById('confirmBtn');
+      if (!pendingConfirmQrData) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Göndərilir...';
+
+      const meta = pendingConfirmMeta || {name:'-', id:'-', type:'Quru Talon'};
+      const qrData = pendingConfirmQrData;
+      const token = pendingConfirmToken || '';
+
+      try{
+        // ✅ IMPORTANT: cache olmasın deyə t=... əlavə edirik
+        // ✅ IMPORTANT: bəzən backend tokeni "confirmToken" gözləyir, ona görə ikisini də göndəririk
+        const url =
+          `${SHEET_API_URL}?action=confirmDrySecond` +
+          `&token=${encodeURIComponent(token)}` +
+          `&confirmToken=${encodeURIComponent(token)}` +
+          `&qrData=${encodeURIComponent(qrData)}`;
+
+        const res = await fetchJSONP(url, { timeoutMs: 12000, retry: 1 });
+
+        // ✅ burada sheetə düşməsinin yeganə yolu: backend confirmDrySecond içində yazmalıdır
+        // biz user-ə düzgün mesaj göstərəcəyik, amma server error verirsə də göstərəcəyik
+        if (res && (res.status === 'error' || res.status === 'failed')){
+          updateStatus('error', res.message || 'Təsdiq alınmadı');
+          addScan({name: meta.name, id: meta.id, type: meta.type, msg: res.message || 'Təsdiq alınmadı', err:true});
+          showResult({resultType:'error', name: meta.name, id: meta.id, type: meta.type, statusText: res.message || 'Təsdiq alınmadı', mode:'auto'});
+          return;
+        }
+
+        // ✅ 2-ci scan təsdiqləndi -> count=2 (3-cü scan “Təkrar cəhd”)
+        setDryCount(qrData, 2);
+
+        updateStatus('success','Təsdiq');
+        addScan({
+          name: res?.data?.adSoyad || meta.name,
+          id: res?.data?.empId || meta.id,
+          type: res?.data?.ticketType || meta.type,
+          msg: res?.message || 'Təsdiq',
+          warn:false, err:false
+        });
+
+        showResult({
+          resultType:'success',
+          name: res?.data?.adSoyad || meta.name,
+          id: res?.data?.empId || meta.id,
+          type: res?.data?.ticketType || meta.type,
+          statusText: res?.message || 'Təsdiq ✅',
+          mode:'auto'
+        });
+
+      }catch(e){
+        updateStatus('error','Təsdiq göndərilmədi');
+        addScan({name: meta.name, id: meta.id, type: meta.type, msg:'Təsdiq göndərilmədi', err:true});
+        showResult({resultType:'error', name: meta.name, id: meta.id, type: meta.type, statusText:'Təsdiq göndərilmədi', mode:'auto'});
+      }finally{
+        btn.textContent = 'Göndərildi ✅';
+      }
+    };
+
+    document.getElementById('closeBtn').onclick = () => {
+      const closeBtn = document.getElementById('closeBtn');
+      if (closeBtn.disabled) return;
+
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+      hideResult();
+    };
+
+    function startCamera(){
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode:"environment" },
+        { fps: 12, qrbox:{ width:250, height:250 }, disableFlip:true },
+        (text)=>{ if (!isProcessing) handleScan(text); },
+        ()=>{}
+      ).catch(err=>{
+        updateStatus('error','Kamera açılmadı!');
+        console.error(err);
+      });
+    }
+
+    window.onload = startCamera;
+    window.onbeforeunload = ()=>{
+      try{ if (html5QrCode) html5QrCode.stop(); }catch(e){}
+      if (countdownInterval) clearInterval(countdownInterval);
+    };
+  </script>
 </body>
 </html>
